@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0b0f17;
+  --surface: #131a26;
+  --surface-2: #1b2433;
+  --border: #26303f;
+  --text: #e6edf6;
+  --muted: #8a97a8;
+  --pos: #3fb950;
+  --neg: #f85149;
+  --accent: #4493f8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-accent: var(--accent);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+/* Tabular figures everywhere money is shown — keeps columns aligned. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
