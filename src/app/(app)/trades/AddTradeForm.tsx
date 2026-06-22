@@ -51,13 +51,13 @@ export function AddTradeForm({
     setError(null);
 
     if (!form.symbol.trim() || !form.entry_price || !form.quantity) {
-      setError("Symbol, entry price and quantity are required.");
+      setError("חובה למלא סימול, מחיר כניסה וכמות.");
       return;
     }
     const exitPrice = num(form.exit_price);
     const exitDate = form.exit_date || null;
     if ((exitPrice == null) !== (exitDate == null)) {
-      setError("A closed trade needs both an exit price and an exit date.");
+      setError("לעסקה סגורה צריך גם מחיר יציאה וגם תאריך יציאה.");
       return;
     }
 
@@ -67,7 +67,7 @@ export function AddTradeForm({
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setError("Not signed in.");
+      setError("לא מחובר.");
       setBusy(false);
       return;
     }
@@ -117,7 +117,7 @@ export function AddTradeForm({
         onClick={() => setOpen(true)}
         className="bg-accent text-white rounded-md px-4 py-2 text-sm font-medium"
       >
-        + Add trade
+        + עסקה חדשה
       </button>
     );
   }
@@ -130,7 +130,7 @@ export function AddTradeForm({
     <form onSubmit={onSubmit} className="bg-surface border border-border rounded-xl p-5 space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div>
-          <label className={labelCls}>Symbol *</label>
+          <label className={labelCls}>סימול *</label>
           <input
             autoFocus
             className={field}
@@ -140,29 +140,29 @@ export function AddTradeForm({
           />
         </div>
         <div>
-          <label className={labelCls}>Direction</label>
+          <label className={labelCls}>כיוון</label>
           <select
             className={field}
             value={form.direction}
             onChange={(e) => set("direction", e.target.value)}
           >
-            <option value="long">Long</option>
-            <option value="short">Short</option>
+            <option value="long">לונג</option>
+            <option value="short">שורט</option>
           </select>
         </div>
         <div>
-          <label className={labelCls}>Currency</label>
+          <label className={labelCls}>מטבע</label>
           <select
             className={field}
             value={form.native_currency}
             onChange={(e) => set("native_currency", e.target.value)}
           >
-            <option value="USD">USD</option>
-            <option value="ILS">ILS</option>
+            <option value="USD">דולר ($)</option>
+            <option value="ILS">שקל (₪)</option>
           </select>
         </div>
         <div>
-          <label className={labelCls}>Entry date</label>
+          <label className={labelCls}>תאריך כניסה</label>
           <input
             type="date"
             className={field}
@@ -171,37 +171,40 @@ export function AddTradeForm({
           />
         </div>
         <div>
-          <label className={labelCls}>Entry price *</label>
+          <label className={labelCls}>מחיר כניסה *</label>
           <input
             type="number"
             step="any"
+            inputMode="decimal"
             className={field}
             value={form.entry_price}
             onChange={(e) => set("entry_price", e.target.value)}
           />
         </div>
         <div>
-          <label className={labelCls}>Quantity *</label>
+          <label className={labelCls}>כמות *</label>
           <input
             type="number"
             step="any"
+            inputMode="decimal"
             className={field}
             value={form.quantity}
             onChange={(e) => set("quantity", e.target.value)}
           />
         </div>
         <div>
-          <label className={labelCls}>Commission / side</label>
+          <label className={labelCls}>עמלה לכל צד</label>
           <input
             type="number"
             step="any"
+            inputMode="decimal"
             className={field}
             value={form.commission_per_side}
             onChange={(e) => set("commission_per_side", e.target.value)}
           />
         </div>
         <div>
-          <label className={labelCls}>Setup</label>
+          <label className={labelCls}>סטאפ</label>
           <select
             className={field}
             value={form.strategy_id}
@@ -222,33 +225,35 @@ export function AddTradeForm({
         onClick={() => setShowMore((v) => !v)}
         className="text-xs text-accent"
       >
-        {showMore ? "− Less" : "+ Plan & exit (optional)"}
+        {showMore ? "− פחות" : "+ תכנון ויציאה (לא חובה)"}
       </button>
 
       {showMore && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
-            <label className={labelCls}>Stop loss</label>
+            <label className={labelCls}>סטופ לוס</label>
             <input
               type="number"
               step="any"
+              inputMode="decimal"
               className={field}
               value={form.stop_loss}
               onChange={(e) => set("stop_loss", e.target.value)}
             />
           </div>
           <div>
-            <label className={labelCls}>Target price</label>
+            <label className={labelCls}>מחיר יעד</label>
             <input
               type="number"
               step="any"
+              inputMode="decimal"
               className={field}
               value={form.target_price}
               onChange={(e) => set("target_price", e.target.value)}
             />
           </div>
           <div>
-            <label className={labelCls}>Exit date</label>
+            <label className={labelCls}>תאריך יציאה</label>
             <input
               type="date"
               className={field}
@@ -257,17 +262,18 @@ export function AddTradeForm({
             />
           </div>
           <div>
-            <label className={labelCls}>Exit price</label>
+            <label className={labelCls}>מחיר יציאה</label>
             <input
               type="number"
               step="any"
+              inputMode="decimal"
               className={field}
               value={form.exit_price}
               onChange={(e) => set("exit_price", e.target.value)}
             />
           </div>
           <div className="col-span-2 md:col-span-4">
-            <label className={labelCls}>Notes</label>
+            <label className={labelCls}>הערות</label>
             <input
               className={field}
               value={form.notes}
@@ -285,14 +291,14 @@ export function AddTradeForm({
           disabled={busy}
           className="bg-accent text-white rounded-md px-4 py-2 text-sm font-medium disabled:opacity-60"
         >
-          {busy ? "Saving…" : "Save trade"}
+          {busy ? "שומר…" : "שמירת עסקה"}
         </button>
         <button
           type="button"
           onClick={() => setOpen(false)}
           className="text-muted text-sm px-3 py-2"
         >
-          Cancel
+          ביטול
         </button>
       </div>
     </form>

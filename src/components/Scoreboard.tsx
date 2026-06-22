@@ -26,37 +26,37 @@ function Stat({
 export function Scoreboard({ stats }: { stats: Stats }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-      <Stat label="Total trades" value={String(stats.totalTrades)} />
-      <Stat label="Win rate" value={formatPercent(stats.winRate)} />
+      <Stat label="מספר עסקאות" value={String(stats.totalTrades)} />
+      <Stat label="אחוז הצלחה" value={formatPercent(stats.winRate)} />
       <Stat
-        label="Avg win / loss"
+        label="רווח / הפסד ממוצע"
         value={`${formatMoney(stats.averageWin)} / ${formatMoney(stats.averageLoss)}`}
-        hint="gross"
+        hint="ברוטו"
       />
       <Stat
-        label="Avg R"
+        label="R ממוצע"
         value={stats.averageR == null ? "—" : `${formatNumber(stats.averageR, 2)}R`}
-        hint="aggregate"
+        hint="מצטבר"
       />
       <Stat
-        label="Profit factor (gross)"
+        label="פקטור רווח (ברוטו)"
         value={stats.profitFactorGross == null ? "—" : formatNumber(stats.profitFactorGross, 2)}
       />
       <Stat
-        label="Profit factor (net)"
+        label="פקטור רווח (נטו)"
         value={stats.profitFactorNet == null ? "—" : formatNumber(stats.profitFactorNet, 2)}
-        hint="after commissions + tax"
+        hint="אחרי עמלות ומס"
       />
       <Stat
-        label="Total gross P&L"
+        label="רווח/הפסד ברוטו"
         value={formatMoney(stats.totalGross, "USD", { signed: true })}
         color={pnlColor(stats.totalGross)}
       />
       <Stat
-        label="Total net P&L"
+        label="רווח/הפסד נטו"
         value={formatMoney(stats.totalNet, "USD", { signed: true })}
         color={pnlColor(stats.totalNet)}
-        hint="after commissions + tax"
+        hint="אחרי עמלות ומס"
       />
     </div>
   );

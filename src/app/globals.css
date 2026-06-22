@@ -34,6 +34,47 @@ body {
 body {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
     sans-serif;
+  /* Native-app feel: no rubber-band scroll chaining, no text selection on chrome. */
+  overscroll-behavior-y: none;
+}
+
+/* Kill the 300ms tap delay / grey flash so every press feels instant. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Interactive elements respond immediately and never get text-selected. */
+button,
+a,
+[role="button"],
+select {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+button,
+a[href],
+[role="button"] {
+  transition: background-color 0.12s ease, color 0.12s ease, opacity 0.12s ease,
+    transform 0.06s ease;
+}
+
+button:active,
+a[href]:active,
+[role="button"]:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+  button:active,
+  a[href]:active,
+  [role="button"]:active {
+    transform: none;
+  }
 }
 
 /* Tabular figures everywhere money is shown — keeps columns aligned. */

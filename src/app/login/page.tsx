@@ -35,12 +35,12 @@ export default function LoginPage() {
           router.push("/dashboard");
           router.refresh();
         } else {
-          setNotice("Account created. Check your email to confirm, then sign in.");
+          setNotice("החשבון נוצר. אשרו את המייל ואז התחברו.");
           setMode("signin");
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(err instanceof Error ? err.message : "משהו השתבש");
     } finally {
       setBusy(false);
     }
@@ -49,8 +49,8 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-semibold mb-1">Trading Journal</h1>
-        <p className="text-muted text-sm mb-6">A mirror for your trading — net, after-tax.</p>
+        <h1 className="text-2xl font-semibold mb-1">יומן מסחר</h1>
+        <p className="text-muted text-sm mb-6">מראה לתוצאות שלך — נטו, אחרי מס.</p>
 
         <form onSubmit={onSubmit} className="bg-surface border border-border rounded-xl p-5 space-y-4">
           <div className="flex gap-2 text-sm">
@@ -61,7 +61,7 @@ export default function LoginPage() {
                 mode === "signin" ? "bg-surface-2 text-text" : "text-muted"
               }`}
             >
-              Sign in
+              התחברות
             </button>
             <button
               type="button"
@@ -70,12 +70,12 @@ export default function LoginPage() {
                 mode === "signup" ? "bg-surface-2 text-text" : "text-muted"
               }`}
             >
-              Sign up
+              הרשמה
             </button>
           </div>
 
           <label className="block text-sm">
-            <span className="text-muted">Email</span>
+            <span className="text-muted">אימייל</span>
             <input
               type="email"
               required
@@ -86,7 +86,7 @@ export default function LoginPage() {
           </label>
 
           <label className="block text-sm">
-            <span className="text-muted">Password</span>
+            <span className="text-muted">סיסמה</span>
             <input
               type="password"
               required
@@ -105,7 +105,7 @@ export default function LoginPage() {
             disabled={busy}
             className="w-full bg-accent text-white rounded-md py-2 font-medium disabled:opacity-60"
           >
-            {busy ? "…" : mode === "signin" ? "Sign in" : "Create account"}
+            {busy ? "…" : mode === "signin" ? "התחברות" : "יצירת חשבון"}
           </button>
         </form>
       </div>

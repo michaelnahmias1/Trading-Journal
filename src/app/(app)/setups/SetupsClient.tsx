@@ -1,52 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { EquityCurveChart } from "@/components/EquityCurveChart";
 import { Scoreboard } from "@/components/Scoreboard";
 import { TimeframeToggle } from "@/components/TimeframeToggle";
-import { computeStats, filterClosedByTimeframe, type Stats } from "@/lib/calculations";
-import { formatMoney, formatNumber, formatPercent, pnlColor } from "@/lib/format";
-import type { Strategy, Timeframe, Trade } from "@/lib/types";
+import { computeStats, equityCurve, filterClosedByTimeframe } from "@/lib/calculations";
+import { useTimeframe } from "@/lib/useTimeframe";
+import type { Strategy, Trade } from "@/lib/types";
 
-function MiniStat({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="flex justify-between py-1.5 border-b border-border/60 last:border-0 text-sm">
-      <span className="text-muted">{label}</span>
-      <span className={`tnum ${color ?? ""}`}>{value}</span>
-    </div>
-  );
-}
+const UNASSIGNED = "__unassigned__";
 
-function SetupCard({ name, stats }: { name: string; stats: Stats }) {
-  return (
-    <div className="bg-surface border border-border rounded-xl p-4 min-w-[220px]">
-      <h3 className="font-medium mb-3">{name}</h3>
-      <MiniStat label="Trades" value={String(stats.totalTrades)} />
-      <MiniStat label="Win rate" value={formatPercent(stats.winRate)} />
-      <MiniStat label="Avg win" value={formatMoney(stats.averageWin)} color="text-pos" />
-      <MiniStat label="Avg loss" value={formatMoney(stats.averageLoss)} color="text-neg" />
-      <MiniStat
-        label="Avg R"
-        value={stats.averageR == null ? "—" : `${formatNumber(stats.averageR, 2)}R`}
-      />
-      <MiniStat
-        label="PF gross"
-        value={stats.profitFactorGross == null ? "—" : formatNumber(stats.profitFactorGross, 2)}
-      />
-      <MiniStat
-        label="PF net"
-        value={stats.profitFactorNet == null ? "—" : formatNumber(stats.profitFactorNet, 2)}
-      />
-      <MiniStat
-        label="Net P&L"
-        value={formatMoney(stats.totalNet, "USD", { signed: true })}
-        color={pnlColor(stats.totalNet)}
-      />
-    </div>
-  );
-}
-
-// Aggregate is the verdict (primary, full scoreboard). Per-setup blocks are the
-// diagnostic — where's the edge, where's the leak — shown side by side.
+// One setup at a time — the same view as the dashboard, but scoped to a single
+// selected setup. Pick which one from the dropdown; everything below recomputes.
 export function SetupsClient({
   trades,
   strategies,
@@ -54,52 +19,86 @@ export function SetupsClient({
   trades: Trade[];
   strategies: Strategy[];
 }) {
-  const [timeframe, setTimeframe] = useState<Timeframe>("year");
+  const [timeframe, setTimeframe] = useTimeframe("year");
 
-  const closed = useMemo(() => filterClosedByTimeframe(trades, timeframe), [trades, timeframe]);
-  const aggregate = useMemo(() => computeStats(closed), [closed]);
+  // Which setups actually have trades, so the picker only offers real options.
+  const hasUnassigned = useMemo(
+    () => trades.some((t) => t.strategy_id == null),
+    [trades]
+  );
 
-  const perSetup = useMemo(() => {
-    const named = strategies.map((s) => ({
-      name: s.name,
-      stats: computeStats(closed.filter((t) => t.strategy_id === s.id)),
-    }));
-    const unassigned = closed.filter((t) => t.strategy_id == null);
-    if (unassigned.length > 0) {
-      named.push({ name: "Unassigned", stats: computeStats(unassigned) });
-    }
-    return named;
-  }, [closed, strategies]);
+  const options = useMemo(() => {
+    const opts = strategies.map((s) => ({ value: s.id, label: s.name }));
+    if (hasUnassigned) opts.push({ value: UNASSIGNED, label: "ללא שיוך" });
+    return opts;
+  }, [strategies, hasUnassigned]);
+
+  const [selected, setSelected] = useState<string>(options[0]?.value ?? "");
+
+  const selectedLabel =
+    options.find((o) => o.value === selected)?.label ?? "";
+
+  const closed = useMemo(() => {
+    const inWindow = filterClosedByTimeframe(trades, timeframe);
+    return inWindow.filter((t) =>
+      selected === UNASSIGNED ? t.strategy_id == null : t.strategy_id === selected
+    );
+  }, [trades, timeframe, selected]);
+
+  const stats = useMemo(() => computeStats(closed), [closed]);
+  const curve = useMemo(() => equityCurve(closed), [closed]);
+
+  if (options.length === 0) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-xl font-semibold">לפי סטאפ</h1>
+        <p className="text-muted text-sm">
+          עדיין אין סטאפים. אפשר להוסיף אותם במסך ההגדרות, ואז לתייג את העסקאות.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Setup breakdown</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold">לפי סטאפ</h1>
+          <select
+            value={selected}
+            onChange={(e) => setSelected(e.target.value)}
+            className="bg-surface-2 border border-border rounded-md px-3 py-1.5 text-sm outline-none focus:border-accent"
+          >
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <TimeframeToggle value={timeframe} onChange={setTimeframe} />
       </div>
 
-      <div>
-        <h2 className="text-sm uppercase tracking-wide text-muted mb-3">
-          Aggregate — the verdict (gross)
-        </h2>
-        <Scoreboard stats={aggregate} />
-      </div>
+      <p className="text-muted text-sm">
+        כל הנתונים כאן מסוננים לסטאפ <span className="text-text">{selectedLabel}</span> בלבד —
+        כך אפשר לראות איפה היתרון ואיפה הדליפה.
+      </p>
 
-      <div>
-        <h2 className="text-sm uppercase tracking-wide text-muted mb-3">
-          Per setup — the diagnostic
-        </h2>
-        {perSetup.length === 0 ? (
-          <p className="text-muted text-sm">
-            No setups yet. Add some on the Settings screen, then tag your trades.
-          </p>
-        ) : (
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {perSetup.map((s) => (
-              <SetupCard key={s.name} name={s.name} stats={s.stats} />
-            ))}
+      <Scoreboard stats={stats} />
+
+      <div className="bg-surface border border-border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm uppercase tracking-wide text-muted">עקומת הון</h2>
+          <div className="flex items-center gap-4 text-xs text-muted">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-3 h-0.5 bg-accent" /> ברוטו
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-3 h-0.5 bg-pos" /> נטו
+            </span>
           </div>
-        )}
+        </div>
+        <EquityCurveChart data={curve} />
       </div>
     </div>
   );

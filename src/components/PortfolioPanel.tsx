@@ -16,24 +16,23 @@ export function PortfolioPanel({
   return (
     <div className="bg-surface border border-border rounded-xl p-5">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm uppercase tracking-wide text-muted">Portfolio value (net)</h2>
+        <h2 className="text-sm uppercase tracking-wide text-muted">שווי התיק (נטו)</h2>
         <span className="text-xs text-muted">
-          USD/ILS {formatNumber(fxRate, 3)} {live ? "" : "· mock"}
+          דולר/שקל {formatNumber(fxRate, 3)} {live ? "" : "· הדמיה"}
         </span>
       </div>
       <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
         <div>
           <div className="text-3xl font-semibold tnum">{formatMoney(value.usd, "USD")}</div>
-          <div className="text-muted text-xs mt-0.5">USD view</div>
+          <div className="text-muted text-xs mt-0.5">בדולרים</div>
         </div>
         <div>
           <div className="text-3xl font-semibold tnum">{formatMoney(value.ils, "ILS")}</div>
-          <div className="text-muted text-xs mt-0.5">ILS view</div>
+          <div className="text-muted text-xs mt-0.5">בשקלים</div>
         </div>
       </div>
       <p className="text-muted text-xs mt-3">
-        What&apos;s left if you liquidate right now. The gap between the two views is currency, not
-        trading.
+        כמה יישאר אם תממש הכול עכשיו. הפער בין שתי התצוגות נובע משער המטבע, לא מהמסחר.
       </p>
     </div>
   );

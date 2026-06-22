@@ -17,7 +17,7 @@ export function CloseTradeForm({ tradeId }: { tradeId: string }) {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!exitPrice) {
-      setError("Enter an exit price.");
+      setError("יש להזין מחיר יציאה.");
       return;
     }
     setBusy(true);
@@ -41,17 +41,18 @@ export function CloseTradeForm({ tradeId }: { tradeId: string }) {
   return (
     <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
       <div>
-        <label className="block text-xs text-muted mb-1">Exit price</label>
+        <label className="block text-xs text-muted mb-1">מחיר יציאה</label>
         <input
           type="number"
           step="any"
+          inputMode="decimal"
           className={field}
           value={exitPrice}
           onChange={(e) => setExitPrice(e.target.value)}
         />
       </div>
       <div>
-        <label className="block text-xs text-muted mb-1">Exit date</label>
+        <label className="block text-xs text-muted mb-1">תאריך יציאה</label>
         <input
           type="date"
           className={field}
@@ -64,7 +65,7 @@ export function CloseTradeForm({ tradeId }: { tradeId: string }) {
         disabled={busy}
         className="bg-accent text-white rounded-md px-4 py-2 text-sm font-medium disabled:opacity-60"
       >
-        {busy ? "…" : "Close trade"}
+        {busy ? "…" : "סגור עסקה"}
       </button>
       {error && <p className="text-neg text-sm w-full">{error}</p>}
     </form>

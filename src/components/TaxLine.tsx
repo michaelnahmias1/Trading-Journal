@@ -9,9 +9,9 @@ export function TaxLine({ balance }: { balance: number }) {
   return (
     <div className="bg-surface border border-border rounded-xl p-4 flex items-center justify-between">
       <div>
-        <div className="text-muted text-xs uppercase tracking-wide">Tax balance</div>
+        <div className="text-muted text-xs uppercase tracking-wide">מאזן מס</div>
         <div className="text-xs text-muted mt-0.5">
-          {owe ? "Liability — owed to the state" : credit ? "Accrued credit (tax shield)" : "Flat"}
+          {owe ? "חבות — מגיע למדינה" : credit ? "זיכוי צבור (מגן מס)" : "מאוזן"}
         </div>
       </div>
       <div

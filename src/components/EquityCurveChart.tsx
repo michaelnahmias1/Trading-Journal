@@ -18,7 +18,7 @@ export function EquityCurveChart({ data }: { data: EquityPoint[] }) {
   if (data.length === 0) {
     return (
       <div className="h-64 flex items-center justify-center text-muted text-sm">
-        No closed trades in this window.
+        אין עסקאות סגורות בטווח הזה.
       </div>
     );
   }
@@ -52,7 +52,7 @@ export function EquityCurveChart({ data }: { data: EquityPoint[] }) {
           <Line
             type="monotone"
             dataKey="gross"
-            name="Gross"
+            name="ברוטו"
             stroke="#4493f8"
             strokeWidth={2}
             dot={false}
@@ -60,7 +60,7 @@ export function EquityCurveChart({ data }: { data: EquityPoint[] }) {
           <Line
             type="monotone"
             dataKey="net"
-            name="Net"
+            name="נטו"
             stroke="#3fb950"
             strokeWidth={2}
             strokeDasharray="4 3"

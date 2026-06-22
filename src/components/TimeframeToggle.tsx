@@ -3,10 +3,10 @@
 import type { Timeframe } from "@/lib/types";
 
 const OPTIONS: { value: Timeframe; label: string }[] = [
-  { value: "month", label: "Month" },
-  { value: "quarter", label: "Quarter" },
-  { value: "year", label: "Year" },
-  { value: "all", label: "All-time" },
+  { value: "month", label: "חודש" },
+  { value: "quarter", label: "רבעון" },
+  { value: "year", label: "שנה" },
+  { value: "all", label: "הכול" },
 ];
 
 // The single source of truth for time. Lifted into whichever screen owns it;

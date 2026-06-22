@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { InstallApp } from "@/components/InstallApp";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, Strategy } from "@/lib/types";
 
@@ -43,7 +44,7 @@ export function SettingsClient({
       default_commission: Number(commission) || 0,
     });
     setSavingProfile(false);
-    setProfileMsg(error ? error.message : "Saved.");
+    setProfileMsg(error ? error.message : "נשמר.");
     router.refresh();
   }
 
@@ -75,36 +76,45 @@ export function SettingsClient({
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <h1 className="text-xl font-semibold">Settings</h1>
+      <h1 className="text-xl font-semibold">הגדרות</h1>
+
+      <InstallApp />
 
       <form onSubmit={saveProfile} className="bg-surface border border-border rounded-xl p-5 space-y-4">
-        <h2 className="text-sm uppercase tracking-wide text-muted">Capital & commission</h2>
+        <h2 className="text-sm uppercase tracking-wide text-muted">ערך התיק ועמלות</h2>
+        <p className="text-muted text-sm">
+          כמה מזומן יש בתיק בכל מטבע. זהו בסיס החישוב של שווי התיק בלוח הבקרה — אליו מתווספים
+          הרווחים וההפסדים.
+        </p>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>Initial capital (USD)</label>
+            <label className={labelCls}>מזומן בתיק — דולרים ($)</label>
             <input
               type="number"
               step="any"
+              inputMode="decimal"
               className={field}
               value={usd}
               onChange={(e) => setUsd(e.target.value)}
             />
           </div>
           <div>
-            <label className={labelCls}>Initial capital (ILS)</label>
+            <label className={labelCls}>מזומן בתיק — שקלים (₪)</label>
             <input
               type="number"
               step="any"
+              inputMode="decimal"
               className={field}
               value={ils}
               onChange={(e) => setIls(e.target.value)}
             />
           </div>
           <div>
-            <label className={labelCls}>Default commission / side</label>
+            <label className={labelCls}>עמלת ברירת מחדל לכל צד</label>
             <input
               type="number"
               step="any"
+              inputMode="decimal"
               className={field}
               value={commission}
               onChange={(e) => setCommission(e.target.value)}
@@ -117,16 +127,16 @@ export function SettingsClient({
             disabled={savingProfile}
             className="bg-accent text-white rounded-md px-4 py-2 text-sm font-medium disabled:opacity-60"
           >
-            {savingProfile ? "Saving…" : "Save"}
+            {savingProfile ? "שומר…" : "שמירה"}
           </button>
           {profileMsg && <span className="text-muted text-sm">{profileMsg}</span>}
         </div>
       </form>
 
       <div className="bg-surface border border-border rounded-xl p-5 space-y-4">
-        <h2 className="text-sm uppercase tracking-wide text-muted">Setups</h2>
+        <h2 className="text-sm uppercase tracking-wide text-muted">סטאפים</h2>
         {strategies.length === 0 ? (
-          <p className="text-muted text-sm">No setups yet.</p>
+          <p className="text-muted text-sm">עדיין אין סטאפים.</p>
         ) : (
           <ul className="space-y-2">
             {strategies.map((s) => (
@@ -139,7 +149,7 @@ export function SettingsClient({
                   onClick={() => deleteSetup(s.id)}
                   className="text-muted hover:text-neg text-xs"
                 >
-                  Delete
+                  מחיקה
                 </button>
               </li>
             ))}
@@ -150,13 +160,13 @@ export function SettingsClient({
             className={field}
             value={newSetup}
             onChange={(e) => setNewSetup(e.target.value)}
-            placeholder="e.g. Breakout, Pullback…"
+            placeholder="לדוגמה: פריצה, פולבק…"
           />
           <button
             type="submit"
             className="bg-accent text-white rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap"
           >
-            Add
+            הוספה
           </button>
         </form>
         {setupErr && <p className="text-neg text-sm">{setupErr}</p>}
