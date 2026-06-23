@@ -6,7 +6,9 @@ import {
   grossPnl,
   netFromGross,
   netPnl,
+  percentReturn,
   portfolioValue,
+  positionSize,
   rMultiple,
   taxAmount,
   taxableBase,
@@ -39,6 +41,22 @@ function makeTrade(over: Partial<Trade> = {}): Trade {
     ...over,
   };
 }
+
+describe("positionSize / percentReturn", () => {
+  it("position size = entry × quantity", () => {
+    expect(positionSize(makeTrade({ entry_price: 100, quantity: 10 }))).toBe(1000);
+  });
+
+  it("percent return = gross / cost basis", () => {
+    const t = makeTrade({ entry_price: 100, quantity: 10 }); // basis 1000
+    expect(percentReturn(100, t)).toBeCloseTo(0.1); // +10%
+    expect(percentReturn(-250, t)).toBeCloseTo(-0.25); // −25%
+  });
+
+  it("is null when there is no cost basis", () => {
+    expect(percentReturn(50, makeTrade({ entry_price: 0, quantity: 0 }))).toBeNull();
+  });
+});
 
 describe("grossPnl", () => {
   it("long: (sell − buy) × qty", () => {

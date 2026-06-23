@@ -48,6 +48,16 @@ export function positionSize(trade: Trade): number {
   return trade.entry_price * trade.quantity;
 }
 
+/**
+ * Return as a fraction of the position's cost basis (entry price × quantity),
+ * computed from a gross P&L figure. Works for both realized (closed) gross and
+ * live (open) unrealized gross. Returns null when there's no cost basis.
+ */
+export function percentReturn(gross: number, trade: Trade): number | null {
+  const size = positionSize(trade);
+  return size === 0 ? null : gross / size;
+}
+
 /** Profit after commissions — the base the tax is computed on. */
 export function taxableBase(trade: Trade): number | null {
   const gross = grossPnl(trade);

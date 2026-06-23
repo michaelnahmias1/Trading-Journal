@@ -7,11 +7,13 @@ import {
   isClosed,
   netFromGross,
   netPnl,
+  percentReturn,
   positionSize,
   totalCommissions,
 } from "@/lib/calculations";
-import { formatMoney, formatNumber, pnlColor } from "@/lib/format";
+import { formatMoney, formatNumber, formatPercent, pnlColor } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
+import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { useLiveQuotes } from "@/lib/useLiveQuotes";
 import type { Currency, Strategy, Trade } from "@/lib/types";
 import { AddTradeForm } from "./AddTradeForm";
@@ -30,6 +32,9 @@ export function TradesClient({
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("open");
+
+  // Always show current data when arriving on / returning to this screen.
+  useAutoRefresh();
 
   // The list is seeded from the server (where auth + RLS are reliable) and then
   // updated OPTIMISTICALLY on each mutation, so trades land in the right bucket
@@ -70,6 +75,9 @@ export function TradesClient({
     pressTimer.current = setTimeout(() => {
       longPressed.current = true;
       menuOpenedAt.current = Date.now();
+      // The long press can start a native text selection; clear it so the menu
+      // doesn't open over highlighted text.
+      if (typeof window !== "undefined") window.getSelection()?.removeAllRanges();
       setMenuTrade(t);
       if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(15);
     }, 500);
@@ -180,7 +188,7 @@ export function TradesClient({
         טיפ: הקשה על עסקה פותחת את הפרטים. לחיצה ארוכה (או קליק ימני) פותחת עריכה ומחיקה.
       </p>
 
-      <div className="bg-surface border border-border rounded-xl overflow-x-auto">
+      <div className="bg-surface border border-border rounded-xl overflow-x-auto select-none [-webkit-user-select:none] [-webkit-touch-callout:none]">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-muted text-xs uppercase tracking-wide border-b border-border">
@@ -190,6 +198,9 @@ export function TradesClient({
               <th className="text-end font-medium px-4 py-3">כמות</th>
               <th className="text-end font-medium px-4 py-3">גודל פוזיציה</th>
               <th className="text-end font-medium px-4 py-3">תאריך</th>
+              <th className="text-end font-medium px-4 py-3">
+                {filter === "closed" ? "תשואה" : "תשואה (חי)"}
+              </th>
               <th className="text-end font-medium px-4 py-3">
                 {filter === "closed" ? "ברוטו" : "ברוטו (חי)"}
               </th>
@@ -202,7 +213,7 @@ export function TradesClient({
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-muted">
+                <td colSpan={10} className="px-4 py-8 text-center text-muted">
                   אין עסקאות {filter === "open" ? "פתוחות" : "סגורות"} עדיין.
                 </td>
               </tr>
@@ -212,6 +223,7 @@ export function TradesClient({
               // Closed trades show realized P&L; open trades show live unrealized.
               const gross = filter === "closed" ? grossPnl(t) : liveGross(t);
               const net = filter === "closed" ? netPnl(t) : liveNet(t);
+              const pct = gross == null ? null : percentReturn(gross, t);
               return (
                 <tr
                   key={t.id}
@@ -243,6 +255,11 @@ export function TradesClient({
                   <td className="px-4 py-3 text-end tnum">{formatNumber(t.quantity, 0)}</td>
                   <td className="px-4 py-3 text-end tnum">{formatMoney(positionSize(t), ccy)}</td>
                   <td className="px-4 py-3 text-end tnum text-muted">{t.entry_date}</td>
+                  <td className={`px-4 py-3 text-end tnum ${pnlColor(pct ?? 0)}`}>
+                    {pct == null
+                      ? "—"
+                      : `${pct > 0 ? "+" : ""}${formatPercent(pct)}`}
+                  </td>
                   <td className={`px-4 py-3 text-end tnum ${pnlColor(gross ?? 0)}`}>
                     {gross == null ? "—" : formatMoney(gross, ccy, { signed: true })}
                   </td>

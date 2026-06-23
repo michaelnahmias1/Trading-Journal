@@ -4,7 +4,7 @@
 // `activate` handler deletes any cache whose name isn't the current one, so a
 // new version clears stale chunks/HTML that an installed PWA had pinned —
 // otherwise a cached broken build can keep being served after a fix ships.
-const CACHE = "tj-shell-v2";
+const CACHE = "tj-shell-v3";
 const SHELL = ["/dashboard", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
