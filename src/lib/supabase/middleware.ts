@@ -37,17 +37,23 @@ export async function updateSession(request: NextRequest) {
     const path = request.nextUrl.pathname;
     const isPublic = path.startsWith("/login") || path.startsWith("/auth");
 
-    if (!user && !isPublic) {
+    // A redirect that PRESERVES every cookie the session refresh just set on
+    // `response`. Supabase rotates (single-use) refresh tokens, so dropping the
+    // freshly-set cookies on a redirect leaves the browser holding stale tokens.
+    // The next request then fails auth and redirects back — an endless
+    // /dashboard ⇄ /login reload loop that the user can't escape. Copying the
+    // cookies onto the redirect response is what breaks that cycle.
+    const redirectTo = (pathname: string) => {
       const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/login";
-      return NextResponse.redirect(redirectUrl);
-    }
+      redirectUrl.pathname = pathname;
+      const redirect = NextResponse.redirect(redirectUrl);
+      for (const cookie of response.cookies.getAll()) redirect.cookies.set(cookie);
+      return redirect;
+    };
 
-    if (user && path.startsWith("/login")) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/dashboard";
-      return NextResponse.redirect(redirectUrl);
-    }
+    if (!user && !isPublic) return redirectTo("/login");
+
+    if (user && path.startsWith("/login")) return redirectTo("/dashboard");
 
     return response;
   } catch {

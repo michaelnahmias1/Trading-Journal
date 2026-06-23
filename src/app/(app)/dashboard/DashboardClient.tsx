@@ -7,7 +7,6 @@ import { Scoreboard } from "@/components/Scoreboard";
 import { TaxLine } from "@/components/TaxLine";
 import { TimeframeToggle } from "@/components/TimeframeToggle";
 import { useTimeframe } from "@/lib/useTimeframe";
-import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { useLiveQuotes } from "@/lib/useLiveQuotes";
 import {
   computeStats,
@@ -31,9 +30,6 @@ export function DashboardClient({
   profile: Profile;
 }) {
   const [timeframe, setTimeframe] = useTimeframe("year");
-
-  // Keep dashboard numbers fresh on navigation / refocus.
-  useAutoRefresh();
 
   const closedAll = useMemo(() => trades.filter(isClosed), [trades]);
   const openAll = useMemo(() => trades.filter((t) => !isClosed(t)), [trades]);
