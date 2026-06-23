@@ -43,6 +43,11 @@ export function totalCommissions(trade: Trade): number {
   return 2 * trade.commission_per_side;
 }
 
+/** Notional position size in the trade's native currency: entry price × quantity. */
+export function positionSize(trade: Trade): number {
+  return trade.entry_price * trade.quantity;
+}
+
 /** Profit after commissions — the base the tax is computed on. */
 export function taxableBase(trade: Trade): number | null {
   const gross = grossPnl(trade);

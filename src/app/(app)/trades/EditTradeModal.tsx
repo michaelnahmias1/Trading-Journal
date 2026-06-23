@@ -11,10 +11,13 @@ export function EditTradeModal({
   trade,
   strategies,
   onClose,
+  onSaved,
 }: {
   trade: Trade;
   strategies: Strategy[];
   onClose: () => void;
+  /** Optional: receive the updated row so a parent list can update instantly. */
+  onSaved?: (trade: Trade) => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -61,7 +64,7 @@ export function EditTradeModal({
 
     setBusy(true);
     const supabase = createClient();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("trades")
       .update({
         symbol: form.symbol.trim().toUpperCase(),
@@ -78,7 +81,9 @@ export function EditTradeModal({
         exit_price: exitPrice,
         notes: form.notes.trim() || null,
       })
-      .eq("id", trade.id);
+      .eq("id", trade.id)
+      .select()
+      .single();
 
     setBusy(false);
     if (error) {
@@ -86,7 +91,10 @@ export function EditTradeModal({
       return;
     }
     onClose();
-    router.refresh();
+    // Let a parent list reflect the edit immediately; fall back to a server
+    // refresh for callers (e.g. the detail page) that don't track local state.
+    if (onSaved && data) onSaved(data as Trade);
+    else router.refresh();
   }
 
   const field =

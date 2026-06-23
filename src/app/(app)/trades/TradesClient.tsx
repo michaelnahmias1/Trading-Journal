@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   grossPnl,
   isClosed,
   netFromGross,
   netPnl,
+  positionSize,
   totalCommissions,
 } from "@/lib/calculations";
 import { formatMoney, formatNumber, pnlColor } from "@/lib/format";
@@ -19,7 +20,7 @@ import { EditTradeModal } from "./EditTradeModal";
 type Filter = "open" | "closed";
 
 export function TradesClient({
-  trades,
+  trades: initialTrades,
   strategies,
   defaultCommission,
 }: {
@@ -29,6 +30,32 @@ export function TradesClient({
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("open");
+
+  // The list is owned client-side and seeded from the server. Mutations update
+  // this state directly (optimistically), so trades land in the right bucket
+  // instantly instead of waiting on a full server round-trip — which is what
+  // caused the lag and the "rows flicker / vanish until refresh" bug.
+  const [trades, setTrades] = useState<Trade[]>(initialTrades);
+
+  // If the server sends a fresh list (navigation / router.refresh), adopt it.
+  useEffect(() => {
+    setTrades(initialTrades);
+  }, [initialTrades]);
+
+  // Pull the authoritative list straight from the DB. Used to reconcile after
+  // mutations and once on mount, bypassing any stale Next.js client route cache.
+  const refetch = useCallback(async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("trades")
+      .select("*")
+      .order("entry_date", { ascending: false });
+    if (!error && data) setTrades(data as Trade[]);
+  }, []);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
 
   // Long-press (mobile) / right-click (desktop) opens an action menu per trade.
   const [menuTrade, setMenuTrade] = useState<Trade | null>(null);
@@ -85,13 +112,34 @@ export function TradesClient({
   async function onDelete(t: Trade) {
     if (!confirm(`למחוק את העסקה ${t.symbol}? פעולה זו אינה הפיכה.`)) return;
     setMenuTrade(null);
+    // Optimistic remove, then reconcile with the DB (restore on failure).
+    const prev = trades;
+    setTrades((ts) => ts.filter((x) => x.id !== t.id));
     const supabase = createClient();
     const { error } = await supabase.from("trades").delete().eq("id", t.id);
     if (error) {
+      setTrades(prev);
       alert(`מחיקה נכשלה: ${error.message}`);
       return;
     }
-    router.refresh();
+    refetch();
+  }
+
+  // A trade was added: drop it into the list and jump to its bucket right away.
+  function onAdded(t?: Trade) {
+    if (t) {
+      setTrades((ts) => [t, ...ts.filter((x) => x.id !== t.id)]);
+      setFilter(isClosed(t) ? "closed" : "open");
+    } else {
+      setFilter("open");
+    }
+    refetch();
+  }
+
+  // A trade was edited via the modal: swap it in place, then reconcile.
+  function onSaved(t: Trade) {
+    setTrades((ts) => ts.map((x) => (x.id === t.id ? t : x)));
+    refetch();
   }
 
   // Unrealized gross for an open position from the live quote (null if no price).
@@ -118,7 +166,7 @@ export function TradesClient({
         <AddTradeForm
           strategies={strategies}
           defaultCommission={defaultCommission}
-          onAdded={() => setFilter("open")}
+          onAdded={onAdded}
         />
       </div>
 
@@ -149,6 +197,7 @@ export function TradesClient({
               <th className="text-start font-medium px-4 py-3">כיוון</th>
               <th className="text-end font-medium px-4 py-3">כניסה</th>
               <th className="text-end font-medium px-4 py-3">כמות</th>
+              <th className="text-end font-medium px-4 py-3">גודל פוזיציה</th>
               <th className="text-end font-medium px-4 py-3">תאריך</th>
               <th className="text-end font-medium px-4 py-3">
                 {filter === "closed" ? "ברוטו" : "ברוטו (חי)"}
@@ -162,7 +211,7 @@ export function TradesClient({
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-muted">
+                <td colSpan={9} className="px-4 py-8 text-center text-muted">
                   אין עסקאות {filter === "open" ? "פתוחות" : "סגורות"} עדיין.
                 </td>
               </tr>
@@ -201,6 +250,7 @@ export function TradesClient({
                   <td className="px-4 py-3">{t.direction === "long" ? "לונג" : "שורט"}</td>
                   <td className="px-4 py-3 text-end tnum">{formatMoney(t.entry_price, ccy)}</td>
                   <td className="px-4 py-3 text-end tnum">{formatNumber(t.quantity, 0)}</td>
+                  <td className="px-4 py-3 text-end tnum">{formatMoney(positionSize(t), ccy)}</td>
                   <td className="px-4 py-3 text-end tnum text-muted">{t.entry_date}</td>
                   <td className={`px-4 py-3 text-end tnum ${pnlColor(gross ?? 0)}`}>
                     {gross == null ? "—" : formatMoney(gross, ccy, { signed: true })}
@@ -259,6 +309,7 @@ export function TradesClient({
           trade={editTrade}
           strategies={strategies}
           onClose={() => setEditTrade(null)}
+          onSaved={onSaved}
         />
       )}
     </div>

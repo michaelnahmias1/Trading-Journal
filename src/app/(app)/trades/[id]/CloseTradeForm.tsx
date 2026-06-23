@@ -32,6 +32,9 @@ export function CloseTradeForm({ tradeId }: { tradeId: string }) {
       setError(error.message);
       return;
     }
+    // Back to the trades list automatically; the list refetches on mount so the
+    // now-closed trade lands in the right bucket immediately.
+    router.push("/trades");
     router.refresh();
   }
 

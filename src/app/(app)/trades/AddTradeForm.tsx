@@ -1,9 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Strategy } from "@/lib/types";
+import type { Strategy, Trade } from "@/lib/types";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -16,9 +15,8 @@ export function AddTradeForm({
 }: {
   strategies: Strategy[];
   defaultCommission: number;
-  onAdded: () => void;
+  onAdded: (trade?: Trade) => void;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -72,22 +70,26 @@ export function AddTradeForm({
       return;
     }
 
-    const { error } = await supabase.from("trades").insert({
-      user_id: user.id,
-      symbol: form.symbol.trim().toUpperCase(),
-      direction: form.direction,
-      native_currency: form.native_currency,
-      entry_date: form.entry_date,
-      entry_price: Number(form.entry_price),
-      quantity: Number(form.quantity),
-      commission_per_side: num(form.commission_per_side) ?? 0,
-      strategy_id: form.strategy_id || null,
-      stop_loss: num(form.stop_loss),
-      target_price: num(form.target_price),
-      exit_date: exitDate,
-      exit_price: exitPrice,
-      notes: form.notes.trim() || null,
-    });
+    const { data, error } = await supabase
+      .from("trades")
+      .insert({
+        user_id: user.id,
+        symbol: form.symbol.trim().toUpperCase(),
+        direction: form.direction,
+        native_currency: form.native_currency,
+        entry_date: form.entry_date,
+        entry_price: Number(form.entry_price),
+        quantity: Number(form.quantity),
+        commission_per_side: num(form.commission_per_side) ?? 0,
+        strategy_id: form.strategy_id || null,
+        stop_loss: num(form.stop_loss),
+        target_price: num(form.target_price),
+        exit_date: exitDate,
+        exit_price: exitPrice,
+        notes: form.notes.trim() || null,
+      })
+      .select()
+      .single();
 
     setBusy(false);
     if (error) {
@@ -107,8 +109,9 @@ export function AddTradeForm({
       notes: "",
     }));
     setOpen(false);
-    onAdded();
-    router.refresh();
+    // Hand the freshly inserted row back so the list shows it instantly — no
+    // wait for a server round-trip and no flicker.
+    onAdded((data as Trade) ?? undefined);
   }
 
   if (!open) {
