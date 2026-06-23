@@ -24,7 +24,7 @@ export function PortfolioPanel({
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm uppercase tracking-wide text-muted">שווי התיק (נטו)</h2>
         <span className={`text-xs ${fxAvailable ? "text-muted" : "text-neg"}`}>
-          {fxAvailable ? `דולר/שקל ${formatNumber(fxRate, 3)} · חי` : "שער דולר/שקל לא זמין"}
+          {fxAvailable ? `דולר/שקל ${formatNumber(fxRate, 3)} · מתעדכן 3×/יום` : "שער דולר/שקל לא זמין"}
         </span>
       </div>
       <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
