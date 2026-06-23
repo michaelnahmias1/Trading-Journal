@@ -25,11 +25,9 @@ import type { Profile, Trade } from "@/lib/types";
 export function DashboardClient({
   trades,
   profile,
-  live,
 }: {
   trades: Trade[];
   profile: Profile;
-  live: boolean;
 }) {
   const [timeframe, setTimeframe] = useTimeframe("year");
 
@@ -37,7 +35,7 @@ export function DashboardClient({
   const openAll = useMemo(() => trades.filter((t) => !isClosed(t)), [trades]);
 
   const openSymbols = useMemo(() => openAll.map((t) => t.symbol), [openAll]);
-  const { quotes, fxRate } = useLiveQuotes(openSymbols);
+  const { quotes, fxRate, missingSymbols } = useLiveQuotes(openSymbols);
 
   const closed = useMemo(
     () => filterClosedByTimeframe(trades, timeframe),
@@ -56,7 +54,9 @@ export function DashboardClient({
         closedTrades: closedAll,
         openTrades: openAll,
         quotes,
-        fxRate,
+        // nativeUsd / nativeIls don't depend on FX; the converted totals are only
+        // shown by PortfolioPanel when a real rate is available (fxRate != null).
+        fxRate: fxRate ?? 0,
       }),
     [profile, closedAll, openAll, quotes, fxRate]
   );
@@ -68,7 +68,7 @@ export function DashboardClient({
         <TimeframeToggle value={timeframe} onChange={setTimeframe} />
       </div>
 
-      <PortfolioPanel value={portfolio} fxRate={fxRate} live={live} />
+      <PortfolioPanel value={portfolio} fxRate={fxRate} missingSymbols={missingSymbols} />
 
       <TaxLine balance={tax} />
 

@@ -22,6 +22,9 @@ export function OpenTradePanel({ trade }: { trade: Trade }) {
   const ccy = trade.native_currency as Currency;
   const { quotes, loading } = useLiveQuotes([trade.symbol]);
   const price = quotes[trade.symbol.toUpperCase()] ?? null;
+  // No live price AND we're done loading → genuinely unavailable. We say so
+  // explicitly rather than showing a dash that could be mistaken for a value.
+  const priceUnavailable = price == null && !loading;
 
   let gross: number | null = null;
   let net: number | null = null;
@@ -44,15 +47,30 @@ export function OpenTradePanel({ trade }: { trade: Trade }) {
           </span>
           רווח/הפסד חי (לא ממומש)
         </span>
-        <span className={`text-2xl font-semibold tnum ${pnlColor(gross ?? 0)}`}>
-          {gross == null ? (loading ? "טוען…" : "—") : formatMoney(gross, ccy, { signed: true })}
+        <span
+          className={`text-2xl font-semibold tnum ${
+            priceUnavailable ? "text-neg" : pnlColor(gross ?? 0)
+          }`}
+        >
+          {gross == null
+            ? loading
+              ? "טוען…"
+              : "אין נתונים"
+            : formatMoney(gross, ccy, { signed: true })}
         </span>
       </div>
+
+      {priceUnavailable && (
+        <p className="text-neg text-sm">
+          לא ניתן לטעון מחיר חי כעת — לא מוצג ערך משוער. נסה שוב בעוד רגע.
+        </p>
+      )}
 
       <div>
         <Row
           label="מחיר נוכחי"
-          value={price == null ? "—" : formatMoney(price, ccy)}
+          value={price != null ? formatMoney(price, ccy) : loading ? "טוען…" : "אין נתונים"}
+          color={priceUnavailable ? "text-neg" : undefined}
         />
         <Row label="מחיר כניסה" value={formatMoney(trade.entry_price, ccy)} />
         <Row

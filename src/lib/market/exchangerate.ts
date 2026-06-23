@@ -9,7 +9,7 @@ export class ExchangeRateFxProvider implements FxProvider {
     const params = new URLSearchParams({ from: "USD", to: "ILS", amount: "1" });
     if (this.apiKey) params.set("access_key", this.apiKey);
     const res = await fetch(`https://api.exchangerate.host/convert?${params.toString()}`, {
-      next: { revalidate: 3600 },
+      next: { revalidate: 60 }, // keep the live rate fresh within the 60s budget
     });
     if (!res.ok) throw new Error(`FX rate fetch failed: ${res.status}`);
     const data = (await res.json()) as { result?: number };

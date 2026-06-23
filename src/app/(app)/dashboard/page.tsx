@@ -1,5 +1,4 @@
 import { getProfile, getTrades } from "@/lib/data";
-import { isLiveMarketData } from "@/lib/market";
 import type { Profile } from "@/lib/types";
 import { DashboardClient } from "./DashboardClient";
 
@@ -20,7 +19,5 @@ export default async function DashboardPage() {
   const [trades, profile] = await Promise.all([getTrades(), getProfile()]);
   const effectiveProfile: Profile = profile ?? { id: "", ...DEFAULT_PROFILE };
 
-  return (
-    <DashboardClient trades={trades} profile={effectiveProfile} live={isLiveMarketData()} />
-  );
+  return <DashboardClient trades={trades} profile={effectiveProfile} />;
 }
