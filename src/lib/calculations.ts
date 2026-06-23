@@ -292,7 +292,10 @@ function nativeNetWorth(input: PortfolioInput): { USD: number; ILS: number } {
   }
 
   for (const t of input.openTrades) {
-    const price = input.quotes[t.symbol];
+    // Quote keys are always uppercase (the /api/quote route and the live-quote
+    // hook normalise symbols), so match that here — otherwise a lower/mixed-case
+    // stored symbol would silently drop the position from the portfolio value.
+    const price = input.quotes[t.symbol.toUpperCase()];
     if (price == null) continue;
     const raw = (price - t.entry_price) * t.quantity;
     const gross = t.direction === "long" ? raw : -raw;

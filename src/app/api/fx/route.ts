@@ -64,11 +64,12 @@ export async function GET() {
     if (readErr) throw readErr;
 
     const cached = (row?.payload as FxPayload | undefined) ?? undefined;
+    const cachedValid = !!cached && typeof cached.rate === "number";
     const rowAgeMs = row ? now - new Date(row.updated_at).getTime() : Infinity;
 
-    if (cached && rowAgeMs < FX_TTL_MS) {
-      mem = cached;
-      return ok(cached);
+    if (cachedValid && rowAgeMs < FX_TTL_MS) {
+      mem = cached!;
+      return ok(cached!);
     }
 
     // 3. Stale/missing → exactly ONE caller does the real fetch. The conditional
@@ -92,7 +93,25 @@ export async function GET() {
       won = !!claimed?.length;
     }
 
-    if (won) return ok(await refreshAndStore(supabase));
+    if (won) {
+      try {
+        return ok(await refreshAndStore(supabase));
+      } catch (e) {
+        // The real fetch failed AFTER we claimed the refresh. Release the claim
+        // by back-dating updated_at so another instance can retry right away,
+        // instead of the rate being locked out (and shown as unavailable) for
+        // the whole 8h window.
+        await supabase
+          .from("app_cache")
+          .update({ updated_at: new Date(now - FX_TTL_MS - 1000).toISOString() })
+          .eq("key", CACHE_KEY)
+          .then(
+            () => {},
+            () => {}
+          );
+        throw e;
+      }
+    }
 
     // 4. Someone else is refreshing. Re-read for their fresh value; otherwise
     //    serve the stale one rather than spending another API call.
