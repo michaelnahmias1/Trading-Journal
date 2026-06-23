@@ -24,6 +24,16 @@ export default function AppError({
         <p className="text-muted text-sm">
           אירעה שגיאה בטעינת המסך. אפשר לנסות שוב.
         </p>
+        {/* Show the real error so it can be screenshotted on mobile (no console
+            access). This is the user's own private app, so it's safe here. */}
+        <pre
+          dir="ltr"
+          className="text-start text-neg text-xs bg-surface-2 border border-border rounded-md p-3 overflow-auto max-h-48 whitespace-pre-wrap break-words"
+        >
+          {error?.name ? `${error.name}: ` : ""}
+          {error?.message || "Unknown error"}
+          {error?.digest ? `\n\ndigest: ${error.digest}` : ""}
+        </pre>
         <div className="flex items-center justify-center gap-2">
           <button
             onClick={reset}

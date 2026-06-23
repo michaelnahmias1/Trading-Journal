@@ -1,6 +1,10 @@
 // Minimal service worker — enough to make the app installable and to serve a
 // cached shell when offline. Data requests always go to the network first.
-const CACHE = "tj-shell-v1";
+// Bump this version on every deploy that must invalidate cached assets. The
+// `activate` handler deletes any cache whose name isn't the current one, so a
+// new version clears stale chunks/HTML that an installed PWA had pinned —
+// otherwise a cached broken build can keep being served after a fix ships.
+const CACHE = "tj-shell-v2";
 const SHELL = ["/dashboard", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
