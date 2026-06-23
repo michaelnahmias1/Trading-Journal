@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -30,3 +31,15 @@ export async function createClient() {
     }
   );
 }
+
+// The authenticated user, validated once per request. The layout, the data
+// helpers and route handlers all need the user; without this each call made its
+// own network round-trip to the auth server, which is what made navigating
+// between screens feel slow. `cache` dedupes them within a single request.
+export const getCurrentUser = cache(async () => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+});

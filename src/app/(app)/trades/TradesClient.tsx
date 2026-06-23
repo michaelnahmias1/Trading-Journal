@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import {
@@ -36,6 +35,10 @@ export function TradesClient({
   const [editTrade, setEditTrade] = useState<Trade | null>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressed = useRef(false);
+  // When the menu opens from a long-press, the finger is still down — the
+  // following touchend/click can land on a menu item and "select" it by accident.
+  // We stamp the open time and ignore menu taps that arrive within this window.
+  const menuOpenedAt = useRef(0);
 
   const open = useMemo(() => trades.filter((t) => !isClosed(t)), [trades]);
   const closed = useMemo(() => trades.filter(isClosed), [trades]);
@@ -49,6 +52,7 @@ export function TradesClient({
     longPressed.current = false;
     pressTimer.current = setTimeout(() => {
       longPressed.current = true;
+      menuOpenedAt.current = Date.now();
       setMenuTrade(t);
       if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(15);
     }, 500);
@@ -57,6 +61,25 @@ export function TradesClient({
   function cancelPress() {
     if (pressTimer.current) clearTimeout(pressTimer.current);
     pressTimer.current = null;
+  }
+
+  // Run a menu action only if a fresh, deliberate tap (not the lingering touch
+  // from the long-press that opened the menu).
+  function menuAction(fn: () => void) {
+    return () => {
+      if (Date.now() - menuOpenedAt.current < 400) return;
+      fn();
+    };
+  }
+
+  function openTrade(t: Trade) {
+    // A normal tap on the row opens the trade; a long-press is handled separately
+    // and must not also navigate.
+    if (longPressed.current) {
+      longPressed.current = false;
+      return;
+    }
+    router.push(`/trades/${t.id}`);
   }
 
   async function onDelete(t: Trade) {
@@ -71,11 +94,17 @@ export function TradesClient({
     router.refresh();
   }
 
-  const liveNet = (t: Trade): number | null => {
+  // Unrealized gross for an open position from the live quote (null if no price).
+  const liveGross = (t: Trade): number | null => {
     const price = quotes[t.symbol.toUpperCase()];
     if (price == null) return null;
     const raw = (price - t.entry_price) * t.quantity;
-    const gross = t.direction === "long" ? raw : -raw;
+    return t.direction === "long" ? raw : -raw;
+  };
+
+  const liveNet = (t: Trade): number | null => {
+    const gross = liveGross(t);
+    if (gross == null) return null;
     return netFromGross(gross, totalCommissions(t));
   };
 
@@ -109,7 +138,7 @@ export function TradesClient({
       </div>
 
       <p className="text-muted text-xs">
-        טיפ: לחיצה ארוכה על עסקה (או קליק ימני) פותחת אפשרויות עריכה ומחיקה.
+        טיפ: הקשה על עסקה פותחת את הפרטים. לחיצה ארוכה (או קליק ימני) פותחת עריכה ומחיקה.
       </p>
 
       <div className="bg-surface border border-border rounded-xl overflow-x-auto">
@@ -118,23 +147,16 @@ export function TradesClient({
             <tr className="text-muted text-xs uppercase tracking-wide border-b border-border">
               <th className="text-start font-medium px-4 py-3">סימול</th>
               <th className="text-start font-medium px-4 py-3">כיוון</th>
-              <th className="text-start font-medium px-4 py-3">סטאפ</th>
-              <th className="text-end font-medium px-4 py-3">כמות</th>
               <th className="text-end font-medium px-4 py-3">כניסה</th>
+              <th className="text-end font-medium px-4 py-3">כמות</th>
+              <th className="text-end font-medium px-4 py-3">תאריך</th>
               <th className="text-end font-medium px-4 py-3">
-                {filter === "closed" ? "יציאה" : "תאריך"}
+                {filter === "closed" ? "ברוטו" : "ברוטו (חי)"}
               </th>
-              {filter === "closed" ? (
-                <>
-                  <th className="text-end font-medium px-4 py-3">ברוטו</th>
-                  <th className="text-end font-medium px-4 py-3">נטו</th>
-                </>
-              ) : (
-                <>
-                  <th className="text-end font-medium px-4 py-3">נטו (חי)</th>
-                  <th className="text-end font-medium px-4 py-3" />
-                </>
-              )}
+              <th className="text-end font-medium px-4 py-3">
+                {filter === "closed" ? "נטו" : "נטו (חי)"}
+              </th>
+              <th className="text-start font-medium px-4 py-3">סטאפ</th>
             </tr>
           </thead>
           <tbody>
@@ -147,69 +169,46 @@ export function TradesClient({
             )}
             {rows.map((t) => {
               const ccy = t.native_currency as Currency;
-              const gross = grossPnl(t);
-              const net = netPnl(t);
-              const live = filter === "open" ? liveNet(t) : null;
+              // Closed trades show realized P&L; open trades show live unrealized.
+              const gross = filter === "closed" ? grossPnl(t) : liveGross(t);
+              const net = filter === "closed" ? netPnl(t) : liveNet(t);
               return (
                 <tr
                   key={t.id}
                   onContextMenu={(e) => {
                     e.preventDefault();
+                    menuOpenedAt.current = Date.now();
                     setMenuTrade(t);
                   }}
                   onTouchStart={() => startPress(t)}
                   onTouchEnd={cancelPress}
                   onTouchMove={cancelPress}
                   onTouchCancel={cancelPress}
+                  onClick={() => openTrade(t)}
                   onClickCapture={(e) => {
                     // Swallow the click that would otherwise fire after a long press.
                     if (longPressed.current) {
                       e.preventDefault();
                       e.stopPropagation();
-                      longPressed.current = false;
                     }
                   }}
-                  className="border-b border-border/60 hover:bg-surface-2/50 select-none"
+                  className="border-b border-border/60 hover:bg-surface-2/50 select-none cursor-pointer [-webkit-touch-callout:none]"
                 >
                   <td className="px-4 py-3">
-                    <Link href={`/trades/${t.id}`} className="font-medium hover:text-accent">
-                      {t.symbol}
-                    </Link>
+                    <span className="font-medium">{t.symbol}</span>
                     <span className="text-muted text-xs ms-1">{ccy}</span>
                   </td>
                   <td className="px-4 py-3">{t.direction === "long" ? "לונג" : "שורט"}</td>
-                  <td className="px-4 py-3 text-muted">{strategyName(t.strategy_id)}</td>
-                  <td className="px-4 py-3 text-end tnum">{formatNumber(t.quantity, 0)}</td>
                   <td className="px-4 py-3 text-end tnum">{formatMoney(t.entry_price, ccy)}</td>
-                  <td className="px-4 py-3 text-end tnum text-muted">
-                    {filter === "closed"
-                      ? `${formatMoney(t.exit_price ?? 0, ccy)} · ${t.exit_date}`
-                      : t.entry_date}
+                  <td className="px-4 py-3 text-end tnum">{formatNumber(t.quantity, 0)}</td>
+                  <td className="px-4 py-3 text-end tnum text-muted">{t.entry_date}</td>
+                  <td className={`px-4 py-3 text-end tnum ${pnlColor(gross ?? 0)}`}>
+                    {gross == null ? "—" : formatMoney(gross, ccy, { signed: true })}
                   </td>
-                  {filter === "closed" ? (
-                    <>
-                      <td className={`px-4 py-3 text-end tnum ${pnlColor(gross ?? 0)}`}>
-                        {gross == null ? "—" : formatMoney(gross, ccy, { signed: true })}
-                      </td>
-                      <td className={`px-4 py-3 text-end tnum ${pnlColor(net ?? 0)}`}>
-                        {net == null ? "—" : formatMoney(net, ccy, { signed: true })}
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className={`px-4 py-3 text-end tnum ${pnlColor(live ?? 0)}`}>
-                        {live == null ? "—" : formatMoney(live, ccy, { signed: true })}
-                      </td>
-                      <td className="px-4 py-3 text-end">
-                        <Link
-                          href={`/trades/${t.id}`}
-                          className="text-accent text-xs whitespace-nowrap hover:underline"
-                        >
-                          סגירה ←
-                        </Link>
-                      </td>
-                    </>
-                  )}
+                  <td className={`px-4 py-3 text-end tnum ${pnlColor(net ?? 0)}`}>
+                    {net == null ? "—" : formatMoney(net, ccy, { signed: true })}
+                  </td>
+                  <td className="px-4 py-3 text-muted">{strategyName(t.strategy_id)}</td>
                 </tr>
               );
             })}
@@ -221,7 +220,7 @@ export function TradesClient({
       {menuTrade && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
-          onClick={() => setMenuTrade(null)}
+          onClick={menuAction(() => setMenuTrade(null))}
         >
           <div
             className="bg-surface border border-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-2"
@@ -231,16 +230,16 @@ export function TradesClient({
               {menuTrade.symbol} · {menuTrade.direction === "long" ? "לונג" : "שורט"}
             </div>
             <button
-              onClick={() => {
+              onClick={menuAction(() => {
                 setEditTrade(menuTrade);
                 setMenuTrade(null);
-              }}
+              })}
               className="w-full text-start px-4 py-3 rounded-lg hover:bg-surface-2 text-sm"
             >
               ✏️ עריכת עסקה
             </button>
             <button
-              onClick={() => onDelete(menuTrade)}
+              onClick={menuAction(() => onDelete(menuTrade))}
               className="w-full text-start px-4 py-3 rounded-lg hover:bg-surface-2 text-sm text-neg"
             >
               🗑️ מחיקת עסקה

@@ -14,7 +14,15 @@ export interface PriceProvider {
   getQuotes(symbols: string[]): Promise<Record<string, number>>;
 }
 
+/** A USD/ILS rate together with the moment it was published by the source. */
+export interface FxResult {
+  /** How many ILS per 1 USD. */
+  rate: number;
+  /** Epoch ms when the source last published this rate (best effort). */
+  asOf: number;
+}
+
 export interface FxProvider {
-  /** USD/ILS rate = how many ILS per 1 USD. */
-  getUsdIlsRate(): Promise<number>;
+  /** USD/ILS rate (ILS per 1 USD) plus when the source last refreshed it. */
+  getUsdIlsRate(): Promise<FxResult>;
 }

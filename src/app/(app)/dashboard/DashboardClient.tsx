@@ -35,7 +35,7 @@ export function DashboardClient({
   const openAll = useMemo(() => trades.filter((t) => !isClosed(t)), [trades]);
 
   const openSymbols = useMemo(() => openAll.map((t) => t.symbol), [openAll]);
-  const { quotes, fxRate, missingSymbols } = useLiveQuotes(openSymbols);
+  const { quotes, fxRate, fxAsOf, missingSymbols } = useLiveQuotes(openSymbols);
 
   const closed = useMemo(
     () => filterClosedByTimeframe(trades, timeframe),
@@ -68,7 +68,12 @@ export function DashboardClient({
         <TimeframeToggle value={timeframe} onChange={setTimeframe} />
       </div>
 
-      <PortfolioPanel value={portfolio} fxRate={fxRate} missingSymbols={missingSymbols} />
+      <PortfolioPanel
+        value={portfolio}
+        fxRate={fxRate}
+        fxAsOf={fxAsOf}
+        missingSymbols={missingSymbols}
+      />
 
       <TaxLine balance={tax} />
 

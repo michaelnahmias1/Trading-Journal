@@ -1,5 +1,5 @@
 import type { PortfolioValue } from "@/lib/calculations";
-import { formatMoney, formatNumber } from "@/lib/format";
+import { formatLastUpdated, formatMoney, formatNumber } from "@/lib/format";
 
 // Portfolio value — state, not statistics. Always NET (after a 25% tax
 // provision, applied to unrealized gains too). Shown in BOTH currencies; the two
@@ -11,20 +11,25 @@ import { formatMoney, formatNumber } from "@/lib/format";
 export function PortfolioPanel({
   value,
   fxRate,
+  fxAsOf = null,
   missingSymbols = [],
 }: {
   value: PortfolioValue;
   fxRate: number | null;
+  fxAsOf?: number | null;
   missingSymbols?: string[];
 }) {
   const fxAvailable = fxRate != null && fxRate > 0;
+  const fxUpdated = fxAsOf != null ? formatLastUpdated(fxAsOf) : null;
 
   return (
     <div className="bg-surface border border-border rounded-xl p-5">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm uppercase tracking-wide text-muted">שווי התיק (נטו)</h2>
         <span className={`text-xs ${fxAvailable ? "text-muted" : "text-neg"}`}>
-          {fxAvailable ? `דולר/שקל ${formatNumber(fxRate, 3)} · מתעדכן 3×/יום` : "שער דולר/שקל לא זמין"}
+          {fxAvailable
+            ? `דולר/שקל ${formatNumber(fxRate, 3)}${fxUpdated ? ` · ${fxUpdated}` : ""}`
+            : "שער דולר/שקל לא זמין"}
         </span>
       </div>
       <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2">

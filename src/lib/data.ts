@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { Profile, Strategy, Trade } from "@/lib/types";
 
 // Server-side data access. RLS guarantees each query only returns the caller's
@@ -33,12 +33,10 @@ export async function getStrategies(): Promise<Strategy[]> {
 
 /** The caller's profile, creating a default row if the trigger hasn't yet. */
 export async function getProfile(): Promise<Profile | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
 
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
     .select("*")

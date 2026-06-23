@@ -10,6 +10,8 @@ export interface LiveQuotes {
    * substitute a fabricated fallback (the old hard-coded 3.7 is gone).
    */
   fxRate: number | null;
+  /** Epoch ms when the FX source last published the rate, or null if unknown. */
+  fxAsOf: number | null;
   loading: boolean;
   /** The last pull failed at the network / API level. */
   error: boolean;
@@ -31,6 +33,7 @@ export function useLiveQuotes(
 ): LiveQuotes {
   const [quotes, setQuotes] = useState<QuoteMap>({});
   const [fxRate, setFxRate] = useState<number | null>(null);
+  const [fxAsOf, setFxAsOf] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [missingSymbols, setMissingSymbols] = useState<string[]>([]);
@@ -56,9 +59,11 @@ export function useLiveQuotes(
         // FX — keep last known value on failure, but flag the error so the UI can
         // mark the rate as unavailable rather than silently using a stale number.
         if (fxRes.ok) {
-          const { usdIls } = await fxRes.json();
-          if (alive && typeof usdIls === "number") setFxRate(usdIls);
-          else anyError = true;
+          const { usdIls, asOf } = await fxRes.json();
+          if (alive && typeof usdIls === "number") {
+            setFxRate(usdIls);
+            if (typeof asOf === "number") setFxAsOf(asOf);
+          } else anyError = true;
         } else {
           anyError = true;
         }
@@ -100,5 +105,5 @@ export function useLiveQuotes(
     };
   }, [key, intervalMs]);
 
-  return { quotes, fxRate, loading, error, missingSymbols, updatedAt };
+  return { quotes, fxRate, fxAsOf, loading, error, missingSymbols, updatedAt };
 }

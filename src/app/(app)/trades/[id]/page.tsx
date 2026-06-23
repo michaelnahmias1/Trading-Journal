@@ -12,6 +12,7 @@ import {
 import { getStrategies, getTrade } from "@/lib/data";
 import { formatMoney, formatNumber, pnlColor } from "@/lib/format";
 import type { Currency } from "@/lib/types";
+import { EditTradeButton } from "./EditTradeButton";
 import { OpenTradePanel } from "./OpenTradePanel";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,14 @@ export default async function TradeDetailPage({
   const setup = trade.strategy_id
     ? strategies.find((s) => s.id === trade.strategy_id)?.name
     : null;
+
+  // Planned reward:risk — how much you aimed to make per unit of risk, set BEFORE
+  // the trade (target vs. stop). Compare it against the R actually achieved (`r`).
+  const plannedRR =
+    trade.stop_loss != null && trade.target_price != null
+      ? Math.abs(trade.target_price - trade.entry_price) /
+        Math.abs(trade.entry_price - trade.stop_loss)
+      : null;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -104,12 +113,16 @@ export default async function TradeDetailPage({
           )}
         </div>
 
-        {/* Plan vs. actual. */}
+        {/* Plan vs. actual — the journal's discipline check: what you intended
+            (stop, target, planned risk/reward) against what actually happened. */}
         <div className="bg-surface border border-border rounded-xl p-5">
-          <h2 className="text-sm uppercase tracking-wide text-muted mb-3">תכנון מול ביצוע</h2>
-          <Row label="תאריך כניסה" value={trade.entry_date} />
-          <Row label="מחיר כניסה" value={formatMoney(trade.entry_price, ccy)} />
-          <Row label="כמות" value={formatNumber(trade.quantity, 0)} />
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm uppercase tracking-wide text-muted">תכנון מול ביצוע</h2>
+            <EditTradeButton trade={trade} strategies={strategies} />
+          </div>
+
+          {/* The plan — set before the trade. */}
+          <h3 className="text-xs text-muted mb-1">התכנון</h3>
           <Row
             label="סטופ לוס"
             value={trade.stop_loss == null ? "—" : formatMoney(trade.stop_loss, ccy)}
@@ -118,13 +131,37 @@ export default async function TradeDetailPage({
             label="מחיר יעד"
             value={trade.target_price == null ? "—" : formatMoney(trade.target_price, ccy)}
           />
-          <Row label="סיכון" value={risk == null ? "—" : formatMoney(risk, ccy)} />
-          <Row label="מכפיל R" value={r == null ? "—" : `${formatNumber(r, 2)}R`} />
-          {closed && (
+          <Row label="סיכון מתוכנן" value={risk == null ? "—" : formatMoney(risk, ccy)} />
+          <Row
+            label="יחס סיכון/סיכוי מתוכנן"
+            value={plannedRR == null ? "—" : `${formatNumber(plannedRR, 2)}R`}
+          />
+
+          {/* The execution — what actually happened. */}
+          <h3 className="text-xs text-muted mt-4 mb-1">הביצוע</h3>
+          <Row label="כניסה" value={`${formatMoney(trade.entry_price, ccy)} · ${trade.entry_date}`} />
+          <Row label="כמות" value={formatNumber(trade.quantity, 0)} />
+          {closed ? (
             <>
-              <Row label="תאריך יציאה" value={trade.exit_date ?? "—"} />
-              <Row label="מחיר יציאה" value={formatMoney(trade.exit_price ?? 0, ccy)} />
+              <Row
+                label="יציאה"
+                value={`${formatMoney(trade.exit_price ?? 0, ccy)} · ${trade.exit_date ?? "—"}`}
+              />
+              <Row
+                label="R שהושג בפועל"
+                value={r == null ? "—" : `${formatNumber(r, 2)}R`}
+                color={r == null ? undefined : pnlColor(r)}
+              />
             </>
+          ) : (
+            <Row label="יציאה" value="— (עסקה פתוחה)" />
+          )}
+
+          {(trade.stop_loss == null || trade.target_price == null) && (
+            <p className="text-muted text-xs mt-3">
+              חסרים שדות תכנון. לחצו על «עריכה» כדי למלא סטופ לוס ומחיר יעד — כך יחושב יחס
+              הסיכון/סיכוי וה־R בפועל.
+            </p>
           )}
         </div>
       </div>

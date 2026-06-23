@@ -1,4 +1,4 @@
-import type { FxProvider, PriceProvider } from "./types";
+import type { FxProvider, FxResult, PriceProvider } from "./types";
 
 // Yahoo Finance — free, NO API key required, near-real-time quotes. The public
 // chart endpoint (v8) returns the current market price in `meta.regularMarketPrice`
@@ -89,10 +89,28 @@ export class YahooPriceProvider implements PriceProvider {
 }
 
 export class YahooFxProvider implements FxProvider {
-  async getUsdIlsRate(): Promise<number> {
+  async getUsdIlsRate(): Promise<FxResult> {
     // "USDILS=X" = how many ILS per 1 USD, intraday & live.
     try {
-      return await fetchYahooPrice("USDILS=X");
+      const url = `${CHART_BASE}/${encodeURIComponent("USDILS=X")}?interval=1m&range=1d`;
+      const res = await fetch(url, { headers: HEADERS, next: { revalidate: 30 } });
+      if (!res.ok) throw new Error(`Yahoo FX failed: ${res.status}`);
+      const data = (await res.json()) as {
+        chart?: {
+          result?: { meta?: { regularMarketPrice?: number; regularMarketTime?: number } }[];
+        };
+      };
+      const meta = data.chart?.result?.[0]?.meta;
+      const rate = meta?.regularMarketPrice;
+      if (typeof rate !== "number" || !Number.isFinite(rate)) {
+        throw new Error("Yahoo FX: no rate");
+      }
+      // `regularMarketTime` is epoch SECONDS of the last quote.
+      const asOf =
+        typeof meta?.regularMarketTime === "number"
+          ? meta.regularMarketTime * 1000
+          : Date.now();
+      return { rate, asOf };
     } catch {
       // Fallback to Frankfurter (ECB reference rates — real, free, no key). Daily
       // cadence, but a genuine published rate, never an invented one.
@@ -100,12 +118,13 @@ export class YahooFxProvider implements FxProvider {
         next: { revalidate: 60 },
       });
       if (!res.ok) throw new Error(`FX fallback failed: ${res.status}`);
-      const data = (await res.json()) as { rates?: { ILS?: number } };
+      const data = (await res.json()) as { rates?: { ILS?: number }; date?: string };
       const rate = data.rates?.ILS;
       if (typeof rate !== "number" || !Number.isFinite(rate)) {
         throw new Error("FX fallback: malformed response");
       }
-      return rate;
+      const parsed = data.date ? Date.parse(data.date) : NaN;
+      return { rate, asOf: Number.isNaN(parsed) ? Date.now() : parsed };
     }
   }
 }
