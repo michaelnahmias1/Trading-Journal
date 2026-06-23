@@ -18,9 +18,19 @@ export class FinnhubPriceProvider implements PriceProvider {
   }
 
   async getQuotes(symbols: string[]): Promise<Record<string, number>> {
-    const entries = await Promise.all(
-      symbols.map(async (s) => [s, await this.getQuote(s)] as const)
+    // Per-symbol resilience: one bad ticker must not blank out the rest. Failed
+    // symbols are OMITTED so the caller reports them as "missing" rather than
+    // failing the whole request (matching YahooPriceProvider's behaviour).
+    const results = await Promise.allSettled(
+      symbols.map(async (s) => {
+        const sym = s.toUpperCase();
+        return [sym, await this.getQuote(sym)] as const;
+      })
     );
-    return Object.fromEntries(entries);
+    const out: Record<string, number> = {};
+    for (const r of results) {
+      if (r.status === "fulfilled") out[r.value[0]] = r.value[1];
+    }
+    return out;
   }
 }

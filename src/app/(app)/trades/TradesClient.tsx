@@ -13,7 +13,6 @@ import {
 } from "@/lib/calculations";
 import { formatMoney, formatNumber, formatPercent, pnlColor } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
-import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { useLiveQuotes } from "@/lib/useLiveQuotes";
 import type { Currency, Strategy, Trade } from "@/lib/types";
 import { AddTradeForm } from "./AddTradeForm";
@@ -32,9 +31,6 @@ export function TradesClient({
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("open");
-
-  // Always show current data when arriving on / returning to this screen.
-  useAutoRefresh();
 
   // The list is seeded from the server (where auth + RLS are reliable) and then
   // updated OPTIMISTICALLY on each mutation, so trades land in the right bucket

@@ -6,7 +6,6 @@ import { Scoreboard } from "@/components/Scoreboard";
 import { TimeframeToggle } from "@/components/TimeframeToggle";
 import { computeStats, equityCurve, filterClosedByTimeframe } from "@/lib/calculations";
 import { useTimeframe } from "@/lib/useTimeframe";
-import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import type { Strategy, Trade } from "@/lib/types";
 
 const UNASSIGNED = "__unassigned__";
@@ -21,9 +20,6 @@ export function SetupsClient({
   strategies: Strategy[];
 }) {
   const [timeframe, setTimeframe] = useTimeframe("year");
-
-  // Keep per-setup numbers fresh on navigation / refocus.
-  useAutoRefresh();
 
   // Which setups actually have trades, so the picker only offers real options.
   const hasUnassigned = useMemo(
