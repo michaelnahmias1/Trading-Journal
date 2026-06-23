@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   grossPnl,
   isClosed,
@@ -31,31 +31,21 @@ export function TradesClient({
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("open");
 
-  // The list is owned client-side and seeded from the server. Mutations update
-  // this state directly (optimistically), so trades land in the right bucket
+  // The list is seeded from the server (where auth + RLS are reliable) and then
+  // updated OPTIMISTICALLY on each mutation, so trades land in the right bucket
   // instantly instead of waiting on a full server round-trip — which is what
-  // caused the lag and the "rows flicker / vanish until refresh" bug.
+  // caused the lag and the "rows flicker / vanish until refresh" feeling.
+  //
+  // We deliberately do NOT re-query from the browser on mount: that could return
+  // an empty set before the client session is ready and blank out the list.
+  // Reconciliation goes through the server (router.refresh) instead.
   const [trades, setTrades] = useState<Trade[]>(initialTrades);
 
-  // If the server sends a fresh list (navigation / router.refresh), adopt it.
+  // Adopt the authoritative list whenever the server sends a fresh one
+  // (navigation or router.refresh after a mutation).
   useEffect(() => {
     setTrades(initialTrades);
   }, [initialTrades]);
-
-  // Pull the authoritative list straight from the DB. Used to reconcile after
-  // mutations and once on mount, bypassing any stale Next.js client route cache.
-  const refetch = useCallback(async () => {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("trades")
-      .select("*")
-      .order("entry_date", { ascending: false });
-    if (!error && data) setTrades(data as Trade[]);
-  }, []);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
 
   // Long-press (mobile) / right-click (desktop) opens an action menu per trade.
   const [menuTrade, setMenuTrade] = useState<Trade | null>(null);
@@ -122,10 +112,11 @@ export function TradesClient({
       alert(`מחיקה נכשלה: ${error.message}`);
       return;
     }
-    refetch();
+    router.refresh();
   }
 
-  // A trade was added: drop it into the list and jump to its bucket right away.
+  // A trade was added: drop it into the list and jump to its bucket right away,
+  // then reconcile with the server in the background.
   function onAdded(t?: Trade) {
     if (t) {
       setTrades((ts) => [t, ...ts.filter((x) => x.id !== t.id)]);
@@ -133,13 +124,13 @@ export function TradesClient({
     } else {
       setFilter("open");
     }
-    refetch();
+    router.refresh();
   }
 
   // A trade was edited via the modal: swap it in place, then reconcile.
   function onSaved(t: Trade) {
     setTrades((ts) => ts.map((x) => (x.id === t.id ? t : x)));
-    refetch();
+    router.refresh();
   }
 
   // Unrealized gross for an open position from the live quote (null if no price).
