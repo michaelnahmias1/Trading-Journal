@@ -10,6 +10,18 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  // Skip the auth round-trip on PREFETCH requests. Next.js prefetches linked
+  // routes on hover / when they scroll into view; doing a getUser() (a call to
+  // Supabase's auth server) for each of those is pure overhead. A prefetch is
+  // never the navigation itself, so it doesn't need guarding — the real request
+  // that follows still runs the full check here, and (app)/layout.tsx guards the
+  // page regardless. This removes the bulk of the per-request auth traffic.
+  const isPrefetch =
+    request.headers.get("next-router-prefetch") === "1" ||
+    request.headers.get("purpose") === "prefetch" ||
+    request.headers.get("sec-purpose")?.includes("prefetch") === true;
+  if (isPrefetch) return response;
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) return response;
