@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { AllocationChart } from "@/components/AllocationChart";
 import { EquityCurveChart } from "@/components/EquityCurveChart";
 import { PortfolioPanel } from "@/components/PortfolioPanel";
 import { Scoreboard } from "@/components/Scoreboard";
@@ -93,19 +94,36 @@ export function DashboardClient({
         <Scoreboard stats={stats} />
       </div>
 
-      <div className="bg-surface border border-border rounded-xl p-5">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm uppercase tracking-wide text-muted">עקומת הון</h2>
-          <div className="flex items-center gap-4 text-xs text-muted">
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-0.5 bg-accent" /> ברוטו
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-0.5 bg-pos" /> נטו
-            </span>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="bg-surface border border-border rounded-xl p-5 lg:col-span-2">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm uppercase tracking-wide text-muted">עקומת הון</h2>
+            <div className="flex items-center gap-4 text-xs text-muted">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-0.5 bg-accent" /> ברוטו
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-0.5 bg-pos" /> נטו
+              </span>
+            </div>
           </div>
+          <EquityCurveChart data={curve} />
         </div>
-        <EquityCurveChart data={curve} />
+
+        <div className="bg-surface border border-border rounded-xl p-5">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm uppercase tracking-wide text-muted">הקצאת התיק</h2>
+            <div className="flex items-center gap-4 text-xs text-muted">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-2 rounded-sm bg-pos" /> מושקע
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-2 rounded-sm bg-accent" /> מזומן
+              </span>
+            </div>
+          </div>
+          <AllocationChart value={portfolio} fxRate={fxRate} />
+        </div>
       </div>
     </div>
   );
