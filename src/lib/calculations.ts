@@ -297,15 +297,17 @@ export function equityCurve(closedTrades: Trade[]): EquityPoint[] {
 //   portfolio = CASH + POSITION COST (at entry) + LIVE UNREALIZED NET
 //
 //   • CASH          initial capital + realized net (closed trades AND partial
-//                   closes of still-open trades) − capital tied up in the still-
-//                   open positions at their ENTRY cost.
-//   • POSITION COST entry_price × remaining_qty for every open position. This is
-//                   the ENTRY cost, not a live price. For SHORTS it is added as a
-//                   POSITIVE value (the borrow/notional value), never negative —
-//                   only the live-net part below carries the short's direction.
+//                   closes of still-open trades) − capital tied up in still-open
+//                   LONG positions at their ENTRY cost. SHORTS do not consume
+//                   cash (they are opened by borrowing), so they never reduce it.
+//   • POSITION COST entry_price × remaining_qty for open LONG positions only —
+//                   the ENTRY cost, not a live price. A SHORT pays no cash and
+//                   owns no asset of that notional value, so it contributes
+//                   NOTHING here; only its live P&L (below) belongs in the value.
 //   • LIVE NET      direction-adjusted unrealized P&L on the remaining quantity,
 //                   net of commissions and a 25% tax provision ("if I liquidate
-//                   now"). The only part that moves in real time.
+//                   now"). The only part that moves in real time. For a short the
+//                   whole portfolio contribution is just this P&L.
 //
 // The total equals the classic  initial + Σ realized net + Σ unrealized net  —
 // nothing about the headline number changes, it is just made legible: the cost
@@ -368,17 +370,21 @@ function nativeBreakdown(input: PortfolioInput): Record<Currency, NativeParts> {
     // Realized net from partial closes already taken → cash, in real time.
     parts.cash += realizedNetFromCloses(t, closes);
 
-    // Capital tied up in the remaining open position, at ENTRY cost: out of cash,
-    // into position cost. For shorts this is the positive borrow value.
-    const cost = t.entry_price * remaining;
-    parts.cash -= cost;
-    parts.openCost += cost;
+    // A LONG ties up cash at its ENTRY cost: the money leaves cash and becomes a
+    // held position of equal value (net zero at entry). A SHORT is opened by
+    // BORROWING — no cash is paid and nothing of that notional is owned — so it
+    // touches neither cash nor position cost; only its live P&L (below) counts.
+    if (t.direction === "long") {
+      const cost = t.entry_price * remaining;
+      parts.cash -= cost;
+      parts.openCost += cost;
+    }
 
     // Live unrealized net on the remaining quantity. Quote keys are uppercase
     // (the /api/quote route and the live-quote hook normalise symbols), so match
-    // that here. If the live price is momentarily missing we keep the position at
-    // entry cost (break-even) rather than dropping it — the value never collapses
-    // to "just cash".
+    // that here. If the live price is momentarily missing we leave the position
+    // at break-even (a long stays at entry cost, a short adds nothing) rather
+    // than dropping it — the value never collapses unexpectedly.
     const price = input.quotes[t.symbol.toUpperCase()];
     if (price == null) continue;
     const raw = (price - t.entry_price) * remaining;

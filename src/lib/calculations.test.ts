@@ -358,7 +358,7 @@ describe("portfolioValue breakdown — cash + entry cost + live net", () => {
     expect(v.cashUsd + v.openCostUsd + v.openLiveNetUsd).toBeCloseTo(v.nativeUsd, 9);
   });
 
-  it("an open SHORT contributes its entry value as a POSITIVE position cost", () => {
+  it("an open SHORT contributes ONLY its live P&L — no cash drain, no position cost", () => {
     const short = makeTrade({
       id: "s",
       direction: "short",
@@ -369,9 +369,40 @@ describe("portfolioValue breakdown — cash + entry cost + live net", () => {
       symbol: "TSLA",
     });
     const v = portfolioValue({ ...base, openTrades: [short], quotes: { TSLA: 90 } });
-    expect(v.openCostUsd).toBeCloseTo(1000, 6); // positive, never negative
+    // Borrowed, not bought: the notional never enters the portfolio.
+    expect(v.openCostUsd).toBeCloseTo(0, 6);
+    expect(v.cashUsd).toBeCloseTo(10000, 6); // cash untouched by the short
     expect(v.openLiveNetUsd).toBeCloseTo(75, 6); // short up: gross +100 → net 75
-    expect(v.nativeUsd).toBeCloseTo(10000 + 75, 6);
+    expect(v.nativeUsd).toBeCloseTo(10000 + 75, 6); // value = initial + P&L only
+  });
+
+  it("a LONG and a SHORT together: only the long's cost is tied up", () => {
+    const long = makeTrade({
+      id: "l",
+      exit_price: null,
+      exit_date: null,
+      entry_price: 100,
+      quantity: 10,
+      symbol: "MSFT",
+    });
+    const short = makeTrade({
+      id: "s",
+      direction: "short",
+      exit_price: null,
+      exit_date: null,
+      entry_price: 50,
+      quantity: 10,
+      symbol: "TSLA",
+    });
+    const v = portfolioValue({
+      ...base,
+      openTrades: [long, short],
+      quotes: { MSFT: 120, TSLA: 40 }, // long +200 gross → 150 net; short +100 gross → 75 net
+    });
+    expect(v.openCostUsd).toBeCloseTo(1000, 6); // long only (100 × 10); short adds nothing
+    expect(v.cashUsd).toBeCloseTo(9000, 6); // 10000 − 1000 long cost; short untouched
+    expect(v.openLiveNetUsd).toBeCloseTo(150 + 75, 6);
+    expect(v.nativeUsd).toBeCloseTo(9000 + 1000 + 225, 6);
   });
 
   it("partial closes feed cash live while the position shrinks", () => {
