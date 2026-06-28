@@ -1,4 +1,4 @@
-import { getProfile, getTrades } from "@/lib/data";
+import { getProfile, getTradeCloses, getTrades } from "@/lib/data";
 import type { Profile } from "@/lib/types";
 import { DashboardClient } from "./DashboardClient";
 
@@ -16,8 +16,12 @@ const DEFAULT_PROFILE: Omit<Profile, "id"> = {
 };
 
 export default async function DashboardPage() {
-  const [trades, profile] = await Promise.all([getTrades(), getProfile()]);
+  const [trades, profile, closes] = await Promise.all([
+    getTrades(),
+    getProfile(),
+    getTradeCloses(),
+  ]);
   const effectiveProfile: Profile = profile ?? { id: "", ...DEFAULT_PROFILE };
 
-  return <DashboardClient trades={trades} profile={effectiveProfile} />;
+  return <DashboardClient trades={trades} profile={effectiveProfile} closes={closes} />;
 }

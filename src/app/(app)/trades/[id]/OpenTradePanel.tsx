@@ -1,9 +1,16 @@
 "use client";
 
-import { netFromGross, riskAmount, totalCommissions } from "@/lib/calculations";
+import {
+  closedQuantity,
+  netFromGross,
+  realizedNetFromCloses,
+  remainingQuantity,
+  riskAmount,
+  totalCommissions,
+} from "@/lib/calculations";
 import { formatMoney, formatNumber, pnlColor } from "@/lib/format";
 import { useLiveQuotes } from "@/lib/useLiveQuotes";
-import type { Currency, Trade } from "@/lib/types";
+import type { Currency, Trade, TradeClose } from "@/lib/types";
 import { CloseTradeForm } from "./CloseTradeForm";
 
 function Row({ label, value, color }: { label: string; value: string; color?: string }) {
@@ -18,7 +25,7 @@ function Row({ label, value, color }: { label: string; value: string; color?: st
 // Live, unrealized result for an OPEN position. The price streams in from the
 // market feed and the P&L recomputes in real time. Closing the trade is right
 // here too, so the whole open-position flow lives in one place.
-export function OpenTradePanel({ trade }: { trade: Trade }) {
+export function OpenTradePanel({ trade, closes }: { trade: Trade; closes: TradeClose[] }) {
   const ccy = trade.native_currency as Currency;
   const { quotes, loading } = useLiveQuotes([trade.symbol]);
   const price = quotes[trade.symbol.toUpperCase()] ?? null;
@@ -26,11 +33,16 @@ export function OpenTradePanel({ trade }: { trade: Trade }) {
   // explicitly rather than showing a dash that could be mistaken for a value.
   const priceUnavailable = price == null && !loading;
 
+  // Live result is on the REMAINING quantity; partial closes shrink the exposure.
+  const remaining = remainingQuantity(trade, closes);
+  const closedSoFar = closedQuantity(closes);
+  const realizedSoFar = closes.length > 0 ? realizedNetFromCloses(trade, closes) : null;
+
   let gross: number | null = null;
   let net: number | null = null;
   let r: number | null = null;
   if (price != null) {
-    const raw = (price - trade.entry_price) * trade.quantity;
+    const raw = (price - trade.entry_price) * remaining;
     gross = trade.direction === "long" ? raw : -raw;
     net = netFromGross(gross, totalCommissions(trade));
     const risk = riskAmount(trade);
@@ -74,6 +86,21 @@ export function OpenTradePanel({ trade }: { trade: Trade }) {
         />
         <Row label="מחיר כניסה" value={formatMoney(trade.entry_price, ccy)} />
         <Row
+          label="כמות נותרת"
+          value={
+            closedSoFar > 0
+              ? `${formatNumber(remaining, 0)} מתוך ${formatNumber(trade.quantity, 0)}`
+              : formatNumber(remaining, 0)
+          }
+        />
+        {realizedSoFar != null && (
+          <Row
+            label="מומש עד כה (נטו)"
+            value={formatMoney(realizedSoFar, ccy, { signed: true })}
+            color={pnlColor(realizedSoFar)}
+          />
+        )}
+        <Row
           label={`עמלות (2 × ${formatMoney(trade.commission_per_side, ccy)})`}
           value={`− ${formatMoney(totalCommissions(trade), ccy)}`}
         />
@@ -87,8 +114,10 @@ export function OpenTradePanel({ trade }: { trade: Trade }) {
       </div>
 
       <div className="pt-2 border-t border-border">
-        <p className="text-muted text-sm mb-3">סגירת הפוזיציה — הזן מחיר ותאריך יציאה:</p>
-        <CloseTradeForm tradeId={trade.id} />
+        <p className="text-muted text-sm mb-3">
+          סגירת הפוזיציה — אפשר לממש חלקית. סגירת כל הכמות הנותרת תסגור את העסקה לפי מחיר יציאה ממוצע משוקלל:
+        </p>
+        <CloseTradeForm trade={trade} remaining={remaining} />
       </div>
     </div>
   );

@@ -76,6 +76,7 @@ describe("TradesClient smoke", () => {
           trades: [trade(), trade({ id: "2", exit_price: 120, exit_date: "2026-02-01" })],
           strategies: [],
           defaultCommission: 1,
+          closes: [],
         })
       );
     });

@@ -7,14 +7,14 @@ import {
   isClosed,
   netFromGross,
   netPnl,
-  percentReturn,
   positionSize,
+  remainingQuantity,
   totalCommissions,
 } from "@/lib/calculations";
 import { formatMoney, formatNumber, formatPercent, pnlColor } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
 import { useLiveQuotes } from "@/lib/useLiveQuotes";
-import type { Currency, Strategy, Trade } from "@/lib/types";
+import type { Currency, Strategy, Trade, TradeClose } from "@/lib/types";
 import { AddTradeForm } from "./AddTradeForm";
 import { EditTradeModal } from "./EditTradeModal";
 
@@ -24,10 +24,12 @@ export function TradesClient({
   trades: initialTrades,
   strategies,
   defaultCommission,
+  closes,
 }: {
   trades: Trade[];
   strategies: Strategy[];
   defaultCommission: number;
+  closes: TradeClose[];
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("open");
@@ -61,6 +63,15 @@ export function TradesClient({
   const open = useMemo(() => trades.filter((t) => !isClosed(t)), [trades]);
   const closed = useMemo(() => trades.filter(isClosed), [trades]);
   const rows = filter === "open" ? open : closed;
+
+  // Partial-close tranches grouped by trade — a partially-closed trade stays in
+  // the OPEN list; only its remaining quantity shrinks.
+  const closesByTrade = useMemo(() => {
+    const map: Record<string, TradeClose[]> = {};
+    for (const c of closes) (map[c.trade_id] ??= []).push(c);
+    return map;
+  }, [closes]);
+  const remainingOf = (t: Trade) => remainingQuantity(t, closesByTrade[t.id] ?? []);
 
   // Live quotes for the open positions — the P&L column updates in real time.
   const openSymbols = useMemo(() => open.map((t) => t.symbol), [open]);
@@ -138,10 +149,11 @@ export function TradesClient({
   }
 
   // Unrealized gross for an open position from the live quote (null if no price).
+  // Computed on the REMAINING quantity so partial closes shrink the exposure.
   const liveGross = (t: Trade): number | null => {
     const price = quotes[t.symbol.toUpperCase()];
     if (price == null) return null;
-    const raw = (price - t.entry_price) * t.quantity;
+    const raw = (price - t.entry_price) * remainingOf(t);
     return t.direction === "long" ? raw : -raw;
   };
 
@@ -219,7 +231,13 @@ export function TradesClient({
               // Closed trades show realized P&L; open trades show live unrealized.
               const gross = filter === "closed" ? grossPnl(t) : liveGross(t);
               const net = filter === "closed" ? netPnl(t) : liveNet(t);
-              const pct = gross == null ? null : percentReturn(gross, t);
+              // Remaining (open) vs original quantity — a partial close shrinks the
+              // open quantity but keeps the trade in the open list.
+              const remaining = remainingOf(t);
+              const isPartial = filter === "open" && remaining < t.quantity;
+              // Percent is over the cost basis actually at work (remaining when open).
+              const sizeBasis = filter === "closed" ? positionSize(t) : t.entry_price * remaining;
+              const pct = gross == null || sizeBasis === 0 ? null : gross / sizeBasis;
               return (
                 <tr
                   key={t.id}
@@ -248,8 +266,23 @@ export function TradesClient({
                   </td>
                   <td className="px-4 py-3">{t.direction === "long" ? "לונג" : "שורט"}</td>
                   <td className="px-4 py-3 text-end tnum">{formatMoney(t.entry_price, ccy)}</td>
-                  <td className="px-4 py-3 text-end tnum">{formatNumber(t.quantity, 0)}</td>
-                  <td className="px-4 py-3 text-end tnum">{formatMoney(positionSize(t), ccy)}</td>
+                  <td className="px-4 py-3 text-end tnum">
+                    {filter === "closed" ? (
+                      formatNumber(t.quantity, 0)
+                    ) : (
+                      <>
+                        {formatNumber(remaining, 0)}
+                        {isPartial && (
+                          <span className="text-muted text-xs ms-1">
+                            ({formatNumber(t.quantity, 0)})
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-end tnum">
+                    {formatMoney(filter === "closed" ? positionSize(t) : t.entry_price * remaining, ccy)}
+                  </td>
                   <td className="px-4 py-3 text-end tnum text-muted">{t.entry_date}</td>
                   <td className={`px-4 py-3 text-end tnum ${pnlColor(pct ?? 0)}`}>
                     {pct == null

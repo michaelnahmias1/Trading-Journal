@@ -17,7 +17,7 @@
 // FX never enters trade-level statistics — only the portfolio display.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { Currency, Timeframe, Trade } from "./types";
+import type { Currency, Timeframe, Trade, TradeClose } from "./types";
 
 /** Israeli capital-gains tax. */
 export const CAPITAL_GAINS_TAX_RATE = 0.25;
@@ -107,6 +107,42 @@ export function rMultiple(trade: Trade): number | null {
 export function netFromGross(gross: number, roundTripCommission: number): number {
   const base = gross - roundTripCommission;
   return base - CAPITAL_GAINS_TAX_RATE * base;
+}
+
+// ── Partial closes ───────────────────────────────────────────────────────────
+// A trade is closed in tranches (see TradeClose). The parent trade row stays
+// open — its `quantity` is the ORIGINAL size — until the closes fill it. Realized
+// P&L from tranches taken so far feeds the live portfolio immediately, but the
+// trade enters statistics/tax/equity only once FULLY closed (where its stored
+// exit_price is already the weighted average of these tranches).
+
+/** Quantity realized so far across a trade's partial closes. */
+export function closedQuantity(closes: TradeClose[]): number {
+  return closes.reduce((sum, c) => sum + c.quantity, 0);
+}
+
+/** Still-open quantity: original quantity minus everything closed so far. */
+export function remainingQuantity(trade: Trade, closes: TradeClose[]): number {
+  return trade.quantity - closedQuantity(closes);
+}
+
+/**
+ * Realized NET P&L from the partial closes taken on a still-open trade.
+ * Each tranche is netted against its own exit commission plus a pro-rata share
+ * of the single entry commission (so a one-shot full close via this path equals
+ * the classic 2 × commission_per_side round trip). Direction-adjusted, so shorts
+ * realize a profit when the close price is below entry.
+ */
+export function realizedNetFromCloses(trade: Trade, closes: TradeClose[]): number {
+  let net = 0;
+  for (const c of closes) {
+    const raw = (c.close_price - trade.entry_price) * c.quantity;
+    const gross = trade.direction === "long" ? raw : -raw;
+    const entryShare =
+      trade.quantity > 0 ? trade.commission_per_side * (c.quantity / trade.quantity) : 0;
+    net += netFromGross(gross, c.commission + entryShare);
+  }
+  return net;
 }
 
 // ── Time filtering ───────────────────────────────────────────────────────────
@@ -256,11 +292,28 @@ export function equityCurve(closedTrades: Trade[]): EquityPoint[] {
 }
 
 // ── Portfolio value (state, not statistics) ──────────────────────────────────
-// portfolio = initial_capital + Σ(net realized) + net unrealized, ALWAYS net
-// (a 25% tax provision is applied to unrealized P&L too, so the figure answers
-// "what's left if I liquidate right now"). Shown in both currencies; the two
-// displays breathe with FX in OPPOSITE directions — that divergence is the
-// signal separating currency moves from trading.
+// The portfolio is shown the way a brokerage account is, as three live parts:
+//
+//   portfolio = CASH + POSITION COST (at entry) + LIVE UNREALIZED NET
+//
+//   • CASH          initial capital + realized net (closed trades AND partial
+//                   closes of still-open trades) − capital tied up in the still-
+//                   open positions at their ENTRY cost.
+//   • POSITION COST entry_price × remaining_qty for every open position. This is
+//                   the ENTRY cost, not a live price. For SHORTS it is added as a
+//                   POSITIVE value (the borrow/notional value), never negative —
+//                   only the live-net part below carries the short's direction.
+//   • LIVE NET      direction-adjusted unrealized P&L on the remaining quantity,
+//                   net of commissions and a 25% tax provision ("if I liquidate
+//                   now"). The only part that moves in real time.
+//
+// The total equals the classic  initial + Σ realized net + Σ unrealized net  —
+// nothing about the headline number changes, it is just made legible: the cost
+// basis that used to hide inside "initial capital" is now an explicit line, so
+// open positions are visibly part of the value.
+//
+// Shown in both currencies; the two views breathe with FX in OPPOSITE directions
+// — that divergence is the signal separating currency moves from trading.
 
 export interface PortfolioInput {
   initialCapitalUsd: number;
@@ -271,6 +324,14 @@ export interface PortfolioInput {
   quotes: Record<string, number>;
   /** USD/ILS rate = how many ILS per 1 USD. */
   fxRate: number;
+  /** Partial-close tranches for open trades, keyed by trade id. */
+  closesByTrade?: Record<string, TradeClose[]>;
+}
+
+interface NativeParts {
+  cash: number;
+  openCost: number;
+  openLiveNet: number;
 }
 
 export interface PortfolioValue {
@@ -278,35 +339,60 @@ export interface PortfolioValue {
   ils: number; // total net worth expressed in ILS
   nativeUsd: number; // sum of USD-denominated holdings (pre-conversion)
   nativeIls: number; // sum of ILS-denominated holdings (pre-conversion)
+  // Breakdown per native currency (state, pre-FX) — see the block comment above.
+  cashUsd: number;
+  cashIls: number;
+  openCostUsd: number;
+  openCostIls: number;
+  openLiveNetUsd: number;
+  openLiveNetIls: number;
 }
 
-/** Net realized + net unrealized accumulated per native currency. */
-function nativeNetWorth(input: PortfolioInput): { USD: number; ILS: number } {
-  const acc: Record<Currency, number> = {
-    USD: input.initialCapitalUsd,
-    ILS: input.initialCapitalIls,
+/** Cash / position-cost / live-net split, accumulated per native currency. */
+function nativeBreakdown(input: PortfolioInput): Record<Currency, NativeParts> {
+  const acc: Record<Currency, NativeParts> = {
+    USD: { cash: input.initialCapitalUsd, openCost: 0, openLiveNet: 0 },
+    ILS: { cash: input.initialCapitalIls, openCost: 0, openLiveNet: 0 },
   };
 
+  // Realized net from fully-closed trades lands in cash.
   for (const t of input.closedTrades) {
-    acc[t.native_currency] += netPnl(t) ?? 0;
+    acc[t.native_currency].cash += netPnl(t) ?? 0;
   }
 
   for (const t of input.openTrades) {
-    // Quote keys are always uppercase (the /api/quote route and the live-quote
-    // hook normalise symbols), so match that here — otherwise a lower/mixed-case
-    // stored symbol would silently drop the position from the portfolio value.
+    const parts = acc[t.native_currency];
+    const closes = input.closesByTrade?.[t.id] ?? [];
+    const remaining = remainingQuantity(t, closes);
+
+    // Realized net from partial closes already taken → cash, in real time.
+    parts.cash += realizedNetFromCloses(t, closes);
+
+    // Capital tied up in the remaining open position, at ENTRY cost: out of cash,
+    // into position cost. For shorts this is the positive borrow value.
+    const cost = t.entry_price * remaining;
+    parts.cash -= cost;
+    parts.openCost += cost;
+
+    // Live unrealized net on the remaining quantity. Quote keys are uppercase
+    // (the /api/quote route and the live-quote hook normalise symbols), so match
+    // that here. If the live price is momentarily missing we keep the position at
+    // entry cost (break-even) rather than dropping it — the value never collapses
+    // to "just cash".
     const price = input.quotes[t.symbol.toUpperCase()];
     if (price == null) continue;
-    const raw = (price - t.entry_price) * t.quantity;
+    const raw = (price - t.entry_price) * remaining;
     const gross = t.direction === "long" ? raw : -raw;
-    acc[t.native_currency] += netFromGross(gross, totalCommissions(t));
+    parts.openLiveNet += netFromGross(gross, totalCommissions(t));
   }
 
   return acc;
 }
 
 export function portfolioValue(input: PortfolioInput): PortfolioValue {
-  const { USD, ILS } = nativeNetWorth(input);
+  const b = nativeBreakdown(input);
+  const USD = b.USD.cash + b.USD.openCost + b.USD.openLiveNet;
+  const ILS = b.ILS.cash + b.ILS.openCost + b.ILS.openLiveNet;
   const fx = input.fxRate;
   return {
     nativeUsd: USD,
@@ -315,5 +401,11 @@ export function portfolioValue(input: PortfolioInput): PortfolioValue {
     // ILS view and dents the USD view — opposite directions, by design.
     usd: USD + (fx > 0 ? ILS / fx : 0),
     ils: ILS + USD * fx,
+    cashUsd: b.USD.cash,
+    cashIls: b.ILS.cash,
+    openCostUsd: b.USD.openCost,
+    openCostIls: b.ILS.openCost,
+    openLiveNetUsd: b.USD.openLiveNet,
+    openLiveNetIls: b.ILS.openLiveNet,
   };
 }

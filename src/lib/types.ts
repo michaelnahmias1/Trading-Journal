@@ -38,6 +38,24 @@ export interface Trade {
   updated_at: string;
 }
 
+/**
+ * One partial realization of a trade. A position is closed in tranches; the
+ * parent Trade stays open (its `quantity` is the ORIGINAL size) until the sum of
+ * its closes fills it, at which point the parent's `exit_price` becomes the
+ * quantity-weighted average of these closes. P&L is NEVER stored here either —
+ * it's derived from the parent's entry and these raw close fields.
+ */
+export interface TradeClose {
+  id: string;
+  trade_id: string;
+  user_id: string;
+  quantity: number;
+  close_price: number;
+  close_date: string; // ISO date
+  commission: number; // exit-side commission for this tranche
+  created_at: string;
+}
+
 export interface Strategy {
   id: string;
   user_id: string;

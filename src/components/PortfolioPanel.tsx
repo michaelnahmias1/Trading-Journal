@@ -1,5 +1,31 @@
 import type { PortfolioValue } from "@/lib/calculations";
-import { formatLastUpdated, formatMoney, formatNumber } from "@/lib/format";
+import { formatLastUpdated, formatMoney, formatNumber, pnlColor } from "@/lib/format";
+
+// One breakdown line — a label and its native USD / ILS amounts side by side, so
+// the cost basis that used to hide inside "initial capital" is now visible.
+function BreakdownRow({
+  label,
+  usd,
+  ils,
+  signed = false,
+  pnl = false,
+}: {
+  label: string;
+  usd: number;
+  ils: number;
+  signed?: boolean;
+  pnl?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <span className="text-muted">{label}</span>
+      <span className="flex gap-4 tnum">
+        <span className={pnl ? pnlColor(usd) : ""}>{formatMoney(usd, "USD", { signed })}</span>
+        <span className={pnl ? pnlColor(ils) : ""}>{formatMoney(ils, "ILS", { signed })}</span>
+      </span>
+    </div>
+  );
+}
 
 // Portfolio value — state, not statistics. Always NET (after a 25% tax
 // provision, applied to unrealized gains too). Shown in BOTH currencies; the two
@@ -45,6 +71,25 @@ export function PortfolioPanel({
           </div>
           <div className="text-muted text-xs mt-0.5">בשקלים</div>
         </div>
+      </div>
+
+      {/* How the value is built: cash + the open positions at their ENTRY cost +
+          the live unrealized net. The first two columns are USD, the second ILS
+          (native, before any FX conversion). */}
+      <div className="mt-4 border-t border-border pt-3 space-y-1.5 text-sm">
+        <BreakdownRow label="מזומן" usd={value.cashUsd} ils={value.cashIls} />
+        <BreakdownRow
+          label="שווי פוזיציות פתוחות (עלות כניסה)"
+          usd={value.openCostUsd}
+          ils={value.openCostIls}
+        />
+        <BreakdownRow
+          label="רווח/הפסד לא ממומש (נטו)"
+          usd={value.openLiveNetUsd}
+          ils={value.openLiveNetIls}
+          signed
+          pnl
+        />
       </div>
 
       {!fxAvailable && (

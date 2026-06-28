@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
+  closedQuantity,
   grossPnl,
   isClosed,
   netPnl,
@@ -9,7 +10,7 @@ import {
   taxableBase,
   totalCommissions,
 } from "@/lib/calculations";
-import { getStrategies, getTrade } from "@/lib/data";
+import { getStrategies, getTrade, getTradeCloses } from "@/lib/data";
 import { formatMoney, formatNumber, pnlColor } from "@/lib/format";
 import type { Currency } from "@/lib/types";
 import { EditTradeButton } from "./EditTradeButton";
@@ -32,11 +33,16 @@ export default async function TradeDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [trade, strategies] = await Promise.all([getTrade(id), getStrategies()]);
+  const [trade, strategies, closes] = await Promise.all([
+    getTrade(id),
+    getStrategies(),
+    getTradeCloses(id),
+  ]);
   if (!trade) notFound();
 
   const ccy = trade.native_currency as Currency;
   const closed = isClosed(trade);
+  const remaining = trade.quantity - closedQuantity(closes);
   const gross = grossPnl(trade);
   const net = netPnl(trade);
   const base = taxableBase(trade);
@@ -109,7 +115,7 @@ export default async function TradeDetailPage({
               </div>
             </>
           ) : (
-            <OpenTradePanel trade={trade} />
+            <OpenTradePanel trade={trade} closes={closes} />
           )}
         </div>
 
@@ -140,11 +146,18 @@ export default async function TradeDetailPage({
           {/* The execution — what actually happened. */}
           <h3 className="text-xs text-muted mt-4 mb-1">הביצוע</h3>
           <Row label="כניסה" value={`${formatMoney(trade.entry_price, ccy)} · ${trade.entry_date}`} />
-          <Row label="כמות" value={formatNumber(trade.quantity, 0)} />
+          <Row
+            label="כמות"
+            value={
+              closed || remaining >= trade.quantity
+                ? formatNumber(trade.quantity, 0)
+                : `${formatNumber(remaining, 0)} (${formatNumber(trade.quantity, 0)})`
+            }
+          />
           {closed ? (
             <>
               <Row
-                label="יציאה"
+                label={closes.length > 1 ? "יציאה (ממוצע משוקלל)" : "יציאה"}
                 value={`${formatMoney(trade.exit_price ?? 0, ccy)} · ${trade.exit_date ?? "—"}`}
               />
               <Row
@@ -165,6 +178,34 @@ export default async function TradeDetailPage({
           )}
         </div>
       </div>
+
+      {closes.length > 0 && (
+        <div className="bg-surface border border-border rounded-xl p-5">
+          <h2 className="text-sm uppercase tracking-wide text-muted mb-3">
+            מימושים {closed ? "" : `· נותרו ${formatNumber(remaining, 0)} מתוך ${formatNumber(trade.quantity, 0)}`}
+          </h2>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-muted text-xs uppercase tracking-wide border-b border-border">
+                <th className="text-start font-medium py-2">תאריך</th>
+                <th className="text-end font-medium py-2">כמות</th>
+                <th className="text-end font-medium py-2">מחיר</th>
+                <th className="text-end font-medium py-2">עמלה</th>
+              </tr>
+            </thead>
+            <tbody>
+              {closes.map((c) => (
+                <tr key={c.id} className="border-b border-border/60 last:border-0">
+                  <td className="py-2 text-muted">{c.close_date}</td>
+                  <td className="py-2 text-end tnum">{formatNumber(c.quantity, 0)}</td>
+                  <td className="py-2 text-end tnum">{formatMoney(c.close_price, ccy)}</td>
+                  <td className="py-2 text-end tnum">{formatMoney(c.commission, ccy)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {trade.notes && (
         <div className="bg-surface border border-border rounded-xl p-5">

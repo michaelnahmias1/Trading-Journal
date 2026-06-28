@@ -1,13 +1,14 @@
-import { getProfile, getStrategies, getTrades } from "@/lib/data";
+import { getProfile, getStrategies, getTradeCloses, getTrades } from "@/lib/data";
 import { TradesClient } from "./TradesClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function TradesPage() {
-  const [trades, strategies, profile] = await Promise.all([
+  const [trades, strategies, profile, closes] = await Promise.all([
     getTrades(),
     getStrategies(),
     getProfile(),
+    getTradeCloses(),
   ]);
 
   return (
@@ -15,6 +16,7 @@ export default async function TradesPage() {
       trades={trades}
       strategies={strategies}
       defaultCommission={profile?.default_commission ?? 0}
+      closes={closes}
     />
   );
 }

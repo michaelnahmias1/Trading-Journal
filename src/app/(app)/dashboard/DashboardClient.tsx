@@ -16,7 +16,7 @@ import {
   portfolioValue,
   taxBalance,
 } from "@/lib/calculations";
-import type { Profile, Trade } from "@/lib/types";
+import type { Profile, Trade, TradeClose } from "@/lib/types";
 
 // All numbers derive from one filtered trade set, recomputed reactively when the
 // global timeframe changes. Portfolio value is current STATE — timeframe-
@@ -25,14 +25,24 @@ import type { Profile, Trade } from "@/lib/types";
 export function DashboardClient({
   trades,
   profile,
+  closes,
 }: {
   trades: Trade[];
   profile: Profile;
+  closes: TradeClose[];
 }) {
   const [timeframe, setTimeframe] = useTimeframe("year");
 
   const closedAll = useMemo(() => trades.filter(isClosed), [trades]);
   const openAll = useMemo(() => trades.filter((t) => !isClosed(t)), [trades]);
+
+  // Partial-close tranches grouped by trade — drives remaining quantity and the
+  // realized-so-far that feeds the live portfolio value.
+  const closesByTrade = useMemo(() => {
+    const map: Record<string, TradeClose[]> = {};
+    for (const c of closes) (map[c.trade_id] ??= []).push(c);
+    return map;
+  }, [closes]);
 
   const openSymbols = useMemo(() => openAll.map((t) => t.symbol), [openAll]);
   const { quotes, fxRate, fxAsOf, missingSymbols } = useLiveQuotes(openSymbols);
@@ -54,11 +64,12 @@ export function DashboardClient({
         closedTrades: closedAll,
         openTrades: openAll,
         quotes,
+        closesByTrade,
         // nativeUsd / nativeIls don't depend on FX; the converted totals are only
         // shown by PortfolioPanel when a real rate is available (fxRate != null).
         fxRate: fxRate ?? 0,
       }),
-    [profile, closedAll, openAll, quotes, fxRate]
+    [profile, closedAll, openAll, quotes, closesByTrade, fxRate]
   );
 
   return (

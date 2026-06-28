@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  closedQuantity,
   computeStats,
   equityCurve,
   filterClosedByTimeframe,
@@ -9,12 +10,14 @@ import {
   percentReturn,
   portfolioValue,
   positionSize,
+  realizedNetFromCloses,
+  remainingQuantity,
   rMultiple,
   taxAmount,
   taxableBase,
   taxBalance,
 } from "./calculations";
-import type { Trade } from "./types";
+import type { Trade, TradeClose } from "./types";
 
 // A minimal trade factory — only the fields a test cares about need overriding.
 function makeTrade(over: Partial<Trade> = {}): Trade {
@@ -267,5 +270,144 @@ describe("portfolioValue — dual currency breathes with FX in opposite directio
       quotes: { MSFT: 120 }, // unrealized gross +200 → net 150
     });
     expect(v.nativeUsd).toBeCloseTo(10000 + 75 + 150, 6);
+  });
+});
+
+// A minimal partial-close factory.
+function makeClose(over: Partial<TradeClose> = {}): TradeClose {
+  return {
+    id: "c1",
+    trade_id: "t1",
+    user_id: "u1",
+    quantity: 5,
+    close_price: 110,
+    close_date: "2026-01-15",
+    commission: 0,
+    created_at: "2026-01-15T00:00:00Z",
+    ...over,
+  };
+}
+
+describe("partial closes — remaining quantity & realized net", () => {
+  it("closedQuantity / remainingQuantity track tranches", () => {
+    const t = makeTrade({ exit_price: null, exit_date: null, quantity: 10 });
+    const closes = [makeClose({ quantity: 4 }), makeClose({ id: "c2", quantity: 3 })];
+    expect(closedQuantity(closes)).toBe(7);
+    expect(remainingQuantity(t, closes)).toBe(3);
+    expect(remainingQuantity(t, [])).toBe(10);
+  });
+
+  it("realizedNetFromCloses is direction-adjusted and nets commissions", () => {
+    const t = makeTrade({ exit_price: null, exit_date: null, entry_price: 100, quantity: 10 });
+    // gross 40, net 0.75×40 = 30
+    expect(realizedNetFromCloses(t, [makeClose({ quantity: 4, close_price: 110 })])).toBeCloseTo(
+      30,
+      9
+    );
+    // short profits when closing BELOW entry
+    const short = makeTrade({
+      direction: "short",
+      exit_price: null,
+      exit_date: null,
+      entry_price: 100,
+      quantity: 10,
+    });
+    expect(realizedNetFromCloses(short, [makeClose({ quantity: 4, close_price: 90 })])).toBeCloseTo(
+      30,
+      9
+    );
+  });
+
+  it("a full close split into tranches equals one close at the weighted average", () => {
+    // tranches 4@110 + 6@120 → weighted avg exit 116
+    const closes = [
+      makeClose({ quantity: 4, close_price: 110 }),
+      makeClose({ id: "c2", quantity: 6, close_price: 120 }),
+    ];
+    const open = makeTrade({ exit_price: null, exit_date: null, entry_price: 100, quantity: 10 });
+    const avg = (110 * 4 + 120 * 6) / 10; // 116
+    const closedAtAvg = makeTrade({ entry_price: 100, quantity: 10, exit_price: avg });
+    expect(realizedNetFromCloses(open, closes)).toBeCloseTo(netPnl(closedAtAvg)!, 9);
+    expect(grossPnl(closedAtAvg)).toBeCloseTo(160, 9); // = 40 + 120 from the tranches
+  });
+});
+
+describe("portfolioValue breakdown — cash + entry cost + live net", () => {
+  const base = {
+    initialCapitalUsd: 10000,
+    initialCapitalIls: 0,
+    closedTrades: [] as Trade[],
+    fxRate: 3.7,
+  };
+
+  it("an open LONG: cost out of cash, into position cost; live net on top", () => {
+    const open = makeTrade({
+      id: "o",
+      exit_price: null,
+      exit_date: null,
+      entry_price: 100,
+      quantity: 10,
+      symbol: "MSFT",
+    });
+    const v = portfolioValue({ ...base, initialCapitalIls: 0, openTrades: [open], quotes: { MSFT: 120 } });
+    expect(v.openCostUsd).toBeCloseTo(1000, 6); // 100 × 10, at ENTRY
+    expect(v.cashUsd).toBeCloseTo(9000, 6); // 10000 − 1000
+    expect(v.openLiveNetUsd).toBeCloseTo(150, 6); // net of +200 gross
+    expect(v.nativeUsd).toBeCloseTo(9000 + 1000 + 150, 6);
+    // breakdown always sums to the total
+    expect(v.cashUsd + v.openCostUsd + v.openLiveNetUsd).toBeCloseTo(v.nativeUsd, 9);
+  });
+
+  it("an open SHORT contributes its entry value as a POSITIVE position cost", () => {
+    const short = makeTrade({
+      id: "s",
+      direction: "short",
+      exit_price: null,
+      exit_date: null,
+      entry_price: 100,
+      quantity: 10,
+      symbol: "TSLA",
+    });
+    const v = portfolioValue({ ...base, openTrades: [short], quotes: { TSLA: 90 } });
+    expect(v.openCostUsd).toBeCloseTo(1000, 6); // positive, never negative
+    expect(v.openLiveNetUsd).toBeCloseTo(75, 6); // short up: gross +100 → net 75
+    expect(v.nativeUsd).toBeCloseTo(10000 + 75, 6);
+  });
+
+  it("partial closes feed cash live while the position shrinks", () => {
+    const open = makeTrade({
+      id: "o",
+      exit_price: null,
+      exit_date: null,
+      entry_price: 100,
+      quantity: 10,
+      symbol: "MSFT",
+    });
+    const v = portfolioValue({
+      ...base,
+      openTrades: [open],
+      quotes: { MSFT: 120 },
+      closesByTrade: { o: [makeClose({ trade_id: "o", quantity: 4, close_price: 110 })] },
+    });
+    expect(v.openCostUsd).toBeCloseTo(600, 6); // entry × remaining 6
+    expect(v.openLiveNetUsd).toBeCloseTo(90, 6); // net of +120 gross on remaining 6
+    // cash = 10000 + realized 30 − tied-up 600
+    expect(v.cashUsd).toBeCloseTo(9430, 6);
+    expect(v.nativeUsd).toBeCloseTo(9430 + 600 + 90, 6);
+  });
+
+  it("keeps an open position at entry cost when its live price is missing", () => {
+    const open = makeTrade({
+      id: "o",
+      exit_price: null,
+      exit_date: null,
+      entry_price: 100,
+      quantity: 10,
+      symbol: "MSFT",
+    });
+    const v = portfolioValue({ ...base, openTrades: [open], quotes: {} });
+    expect(v.openCostUsd).toBeCloseTo(1000, 6);
+    expect(v.openLiveNetUsd).toBeCloseTo(0, 6);
+    expect(v.nativeUsd).toBeCloseTo(10000, 6); // included at break-even, not dropped
   });
 });
